@@ -174,6 +174,79 @@ class MyProvider(LLMProvider):
 
 That's the only method you need. `complete_sync()` has a default implementation that wraps `complete()` with `asyncio.run`.
 
+## MCP server (Claude Code, Cursor)
+
+agent-verdict ships as an MCP server, so you can use it as a tool inside Claude Code, Cursor, or anything that speaks MCP.
+
+### Install
+
+```bash
+pip install agent-verdict[mcp-anthropic]
+# or
+pip install agent-verdict[mcp-openai]
+```
+
+### Claude Code
+
+Add to your project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agent-verdict": {
+      "command": "agent-verdict-mcp",
+      "env": {
+        "ANTHROPIC_API_KEY": "your-key",
+        "VERDICT_PROVIDER": "anthropic"
+      }
+    }
+  }
+}
+```
+
+Or add it from the command line:
+
+```bash
+claude mcp add agent-verdict agent-verdict-mcp
+```
+
+### Cursor
+
+In `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "agent-verdict": {
+      "command": "agent-verdict-mcp",
+      "env": {
+        "OPENAI_API_KEY": "your-key",
+        "VERDICT_PROVIDER": "openai"
+      }
+    }
+  }
+}
+```
+
+### Available tools
+
+Once connected, you get three tools:
+
+- **`evaluate`** — Full pipeline. Confidence + verification + adversarial. Pass a result and task context, get back a complete verdict.
+- **`check_confidence`** — Just the confidence stage. Quick sanity check without burning 4 LLM calls.
+- **`adversarial_check`** — Just the adversarial stage. You already trust the result, but want to poke holes in it.
+
+All tools accept `confidence_threshold`, `relevance_threshold`, and `require_defense` parameters to control drop behavior.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERDICT_PROVIDER` | `anthropic` | `anthropic` or `openai` |
+| `VERDICT_MODEL` | provider default | Model name to use |
+
+The server reads API keys from the standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
+
 ## Design notes
 
 - **No retry logic.** The underlying SDK (anthropic, openai, etc.) handles retries. This library doesn't add another layer.
