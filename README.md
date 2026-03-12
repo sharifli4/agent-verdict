@@ -240,6 +240,77 @@ VerdictConfig(
 
 CLI equivalents: `--confidence-threshold`, `--relevance-threshold`, `--no-require-defense`.
 
+## All available stages
+
+The default pipeline uses the first three. The rest you can mix in.
+
+### LLM-based (need an API key)
+
+| Stage | What it does | LLM calls |
+|---|---|---|
+| `ConfidenceStage` | Score confidence and relevance (0-1) | 1 |
+| `VerificationStage` | Independent re-check: "would I reach the same conclusion?" | 1 |
+| `AdversarialStage` | Generate counter-argument, then defend against it | 2 |
+| `SelfConsistencyStage` | Run the task N times independently, measure agreement | 2N |
+
+### Algorithmic (no LLM needed, run locally)
+
+| Stage | What it does | Requires |
+|---|---|---|
+| `SemanticSimilarityStage` | Embedding cosine similarity — is the answer on-topic? | `pip install agent-verdict[embeddings]` |
+| `EntailmentStage` | NLI model checks if context supports the answer | `pip install agent-verdict[nli]` |
+| `LogprobStage` | Read token log probabilities for real model uncertainty | OpenAI provider (has logprob support) |
+
+The algorithmic stages use completely different models. They break the "same brain grading itself" problem.
+
+`SemanticSimilarityStage` and `EntailmentStage` fall back to LLM-based checks if their local models aren't installed. So they always work — they're just better with the local models.
+
+### Building a custom pipeline
+
+Pick the stages you want:
+
+```python
+from agent_verdict import (
+    VerdictPipeline,
+    ConfidenceStage,
+    SelfConsistencyStage,
+    EntailmentStage,
+    AdversarialStage,
+)
+
+# Cheap and fast — just confidence + embedding relevance
+pipeline = VerdictPipeline(llm=llm, stages=[
+    ConfidenceStage(),
+    SemanticSimilarityStage(),
+])
+
+# Maximum rigor — everything
+pipeline = VerdictPipeline(llm=llm, stages=[
+    SemanticSimilarityStage(),   # is it even on-topic? (local, fast)
+    EntailmentStage(),           # does the context support it? (local, fast)
+    ConfidenceStage(),           # LLM confidence score
+    SelfConsistencyStage(num_samples=5),  # 5 independent samples, vote
+    VerificationStage(),         # fresh independent check
+    AdversarialStage(),          # attack + defend
+])
+
+# Fast + different-model verification
+pipeline = VerdictPipeline(llm=llm, stages=[
+    ConfidenceStage(),
+    EntailmentStage(),           # DeBERTa, not the same LLM
+])
+```
+
+### Self-consistency details
+
+`SelfConsistencyStage` asks the LLM to solve the same task N times independently, then checks how many of those answers agree with the agent's answer. If 4 out of 5 agree, confidence is high. If all 5 disagree, the answer is probably wrong.
+
+```python
+SelfConsistencyStage(num_samples=5)  # default is 3
+```
+
+Cost: 2N LLM calls (N samples + N agreement checks). Samples run in parallel.
+
 ## Extend it
 
 ### Bring your own LLM
@@ -269,10 +340,14 @@ pipeline = VerdictPipeline(llm=llm, stages=[ConfidenceStage(), MyStage()])
 
 ## How many LLM calls?
 
+Default pipeline (Confidence → Verification → Adversarial):
+
 - Confidence: 1
 - Verification: 1
 - Adversarial: 2 (attack + defend)
-- **Full pipeline: 4 total**
+- **Default: 4 total**
+
+With self-consistency (N=3): add 6 calls. With local stages (embeddings, NLI): 0 extra calls.
 
 Bad answers fail at step 1 and cost only 1 call.
 
