@@ -134,16 +134,9 @@ async def adversarial_check(
     require_defense: bool = True,
 ) -> str:
     from .models import Verdict
-    from .pipeline import VerdictPipeline
     from .stages import AdversarialStage
 
     config = VerdictConfig(require_defense=require_defense)
-    pipeline = VerdictPipeline(
-        llm=_get_provider(),
-        config=config,
-        stages=[AdversarialStage()],
-    )
-    # Pre-populate justification so adversarial stage has something to work with
     llm = _get_provider()
     stage = AdversarialStage()
     verdict = Verdict(result=result, justification=justification)
