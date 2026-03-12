@@ -41,6 +41,9 @@ curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/instal
 
 # Both
 curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s all
+
+# With MCP server (for Claude Code / Cursor)
+curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s mcp
 ```
 
 Set your API key if you haven't already:

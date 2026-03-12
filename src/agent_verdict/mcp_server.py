@@ -47,14 +47,20 @@ def _get_provider():
     provider_name = _detect_provider()
     model = os.environ.get("VERDICT_MODEL")
 
-    if provider_name == "openai":
-        from .llm.openai import OpenAIProvider
+    try:
+        if provider_name == "openai":
+            from .llm.openai import OpenAIProvider
 
-        return OpenAIProvider(model=model) if model else OpenAIProvider()
-    else:
-        from .llm.anthropic import AnthropicProvider
+            return OpenAIProvider(model=model) if model else OpenAIProvider()
+        else:
+            from .llm.anthropic import AnthropicProvider
 
-        return AnthropicProvider(model=model) if model else AnthropicProvider()
+            return AnthropicProvider(model=model) if model else AnthropicProvider()
+    except ImportError as e:
+        raise RuntimeError(
+            f"Provider '{provider_name}' not installed. "
+            f"Run: pip install 'agent-verdict[{provider_name},mcp]'"
+        ) from e
 
 
 def _verdict_to_dict(verdict) -> dict:

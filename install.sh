@@ -14,13 +14,15 @@ ok()    { printf "${GREEN}✓${RESET} %s\n" "$1"; }
 warn()  { printf "${YELLOW}!${RESET} %s\n" "$1"; }
 fail()  { printf "${RED}✗${RESET} %s\n" "$1"; exit 1; }
 
-# --- detect provider from args or env ---
+# --- detect provider and extras from args or env ---
 PROVIDER=""
+MCP=false
 for arg in "$@"; do
     case "$arg" in
         anthropic|claude) PROVIDER="anthropic" ;;
         openai|gpt)       PROVIDER="openai" ;;
-        all)               PROVIDER="anthropic,openai" ;;
+        all)               PROVIDER="anthropic,openai"; MCP=true ;;
+        mcp)               MCP=true ;;
     esac
 done
 
@@ -36,7 +38,11 @@ if [ -z "$PROVIDER" ]; then
     fi
 fi
 
-EXTRAS="agent-verdict[${PROVIDER}]"
+if [ "$MCP" = true ]; then
+    EXTRAS="agent-verdict[${PROVIDER},mcp]"
+else
+    EXTRAS="agent-verdict[${PROVIDER}]"
+fi
 
 echo ""
 printf "${BOLD}  agent-verdict installer${RESET}\n"
@@ -65,7 +71,11 @@ else
 fi
 
 echo ""
-ok "Installed agent-verdict with ${PROVIDER} provider"
+if [ "$MCP" = true ]; then
+    ok "Installed agent-verdict with ${PROVIDER} provider + MCP server"
+else
+    ok "Installed agent-verdict with ${PROVIDER} provider"
+fi
 echo ""
 
 # --- check API key ---
@@ -97,3 +107,10 @@ printf "${BOLD}  Try it:${RESET}\n"
 echo ""
 printf "    agent-verdict evaluate \"your agent's answer\" -c \"what it should do\"\n"
 echo ""
+
+if [ "$MCP" = true ]; then
+    printf "${BOLD}  Add to Claude Code:${RESET}\n"
+    echo ""
+    printf "    claude mcp add agent-verdict agent-verdict-mcp\n"
+    echo ""
+fi
