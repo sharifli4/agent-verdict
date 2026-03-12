@@ -31,8 +31,20 @@ mcp = FastMCP(
 )
 
 
+def _detect_provider() -> str:
+    """Auto-detect from VERDICT_PROVIDER env var, or from which API key is set."""
+    explicit = os.environ.get("VERDICT_PROVIDER", "").lower()
+    if explicit:
+        return explicit
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai"
+    return "anthropic"
+
+
 def _get_provider():
-    provider_name = os.environ.get("VERDICT_PROVIDER", "anthropic").lower()
+    provider_name = _detect_provider()
     model = os.environ.get("VERDICT_MODEL")
 
     if provider_name == "openai":

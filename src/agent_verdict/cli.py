@@ -34,8 +34,19 @@ def _color(text: str, code: str) -> str:
     return f"{code}{text}{RESET}"
 
 
-def _get_provider(provider_name: str, model: str | None):
-    if provider_name == "openai":
+def _detect_provider() -> str:
+    """Auto-detect provider from available API keys."""
+    import os
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai"
+    return "anthropic"  # default, will fail with a clear error from the SDK
+
+
+def _get_provider(provider_name: str | None, model: str | None):
+    name = provider_name or _detect_provider()
+    if name == "openai":
         from .llm.openai import OpenAIProvider
         return OpenAIProvider(model=model) if model else OpenAIProvider()
     else:
@@ -133,8 +144,8 @@ def main():
         description="Check if your agent's answer is actually good.",
     )
     parser.add_argument(
-        "-p", "--provider", default="anthropic", choices=["anthropic", "openai"],
-        help="LLM provider (default: anthropic)",
+        "-p", "--provider", default=None, choices=["anthropic", "openai"],
+        help="LLM provider (auto-detected from API keys if not set)",
     )
     parser.add_argument("-m", "--model", default=None, help="model name")
     parser.add_argument("--json", action="store_true", help="output raw JSON")
