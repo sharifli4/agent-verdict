@@ -25,11 +25,12 @@ If it fails at any step, the rest don't run. No wasted LLM calls.
 ## Install
 
 ```bash
-pip install agent-verdict
+# straight from github
+pip install git+https://github.com/sharifli4/agent-verdict.git
 
-# pick your LLM provider
-pip install agent-verdict[anthropic]
-pip install agent-verdict[openai]
+# with a provider
+pip install "agent-verdict[anthropic] @ git+https://github.com/sharifli4/agent-verdict.git"
+pip install "agent-verdict[openai] @ git+https://github.com/sharifli4/agent-verdict.git"
 ```
 
 ## Usage
