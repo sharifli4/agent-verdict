@@ -351,6 +351,22 @@ With self-consistency (N=3): add 6 calls. With local stages (embeddings, NLI): 0
 
 Bad answers fail at step 1 and cost only 1 call.
 
+## Evaluation algorithms
+
+The pipeline evaluates agent results using seven algorithms, each targeting a different failure mode:
+
+| # | Algorithm | Technique | What it catches |
+|---|-----------|-----------|-----------------|
+| 1 | **LLM Confidence Scoring** | Structured prompting with JSON schema — LLM rates confidence and relevance on 0.0-1.0 scale | Low-quality or vague answers |
+| 2 | **Independent Verification** | Blind re-derivation — LLM independently solves the task without seeing the original answer, then compares | Answers that don't hold up under independent review |
+| 3 | **Adversarial Dialectic** | Two-step argue-then-defend — generates strongest counter-argument, then attempts to defend the original answer | Plausible-sounding but flawed answers |
+| 4 | **Self-Consistency Sampling** | [Wang et al. 2022](https://arxiv.org/abs/2203.11171) — samples N independent answers in parallel, measures agreement rate via majority voting | Unstable or unreliable answers where the model can't consistently reach the same conclusion |
+| 5 | **Cosine Similarity** | Sentence embeddings ([all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)) — computes `dot(a,b) / (\|\|a\|\| * \|\|b\|\|)` between task and answer vectors | Off-topic or irrelevant answers |
+| 6 | **Natural Language Inference** | NLI classification ([DeBERTa-v3](https://huggingface.co/cross-encoder/nli-deberta-v3-small)) — scores entailment, neutral, contradiction probabilities between task context and answer | Hallucinated answers that contradict the given context |
+| 7 | **Log-Probability Calibration** | Token-level logprobs — restates the answer and computes `exp(mean_logprob)` as a real internal uncertainty signal | Answers where the model sounds confident but is internally uncertain |
+
+Stages 5-7 use different models/signals than the evaluating LLM, breaking the "same brain grading itself" problem. Stages 5 and 6 fall back to LLM-based checks if their local models aren't installed.
+
 ## Running tests
 
 ```bash
