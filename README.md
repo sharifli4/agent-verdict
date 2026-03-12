@@ -4,20 +4,10 @@
   <img src="demo/demo.gif" alt="agent-verdict demo" width="800">
 </p>
 
-You have an AI agent. It gives you an answer. But is the answer actually good? You don't know. The agent doesn't know either. It just sounds confident.
-
-This library asks that question properly. It takes your agent's output and does three things:
-
-1. **"How sure are you?"** — Scores the answer 0 to 1. Low score? Thrown out immediately.
-2. **"Would you say the same thing if I asked you fresh?"** — A second, independent check. If the answer doesn't hold up on its own, it's gone.
-3. **"Here's the best argument against you. Defend yourself."** — Generates a counter-argument, then tries to defend the original answer. If the defense fails, the answer is dropped.
-
-If the answer survives all three, you get it back with all the details — the scores, the reasoning, the counter-argument, the defense. If it doesn't survive, you know exactly why.
-
-That's it. That's the whole thing.
+Verify your AI agent's answers. Confidence scoring, independent verification, and adversarial stress-testing in one pipeline.
 
 ```
-Your agent's answer → Confidence check → Verification → Adversarial attack → Verdict
+Agent's answer → Confidence check → Verification → Adversarial attack → Verdict
 ```
 
 If it fails at any step, the rest don't run. No wasted LLM calls.
@@ -28,25 +18,7 @@ If it fails at any step, the rest don't run. No wasted LLM calls.
 curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh
 ```
 
-That's it. It detects your package manager (uv, pipx, pip) and installs everything. If you already have an API key set, it picks the right provider automatically.
-
-You can also specify the provider:
-
-```bash
-# Claude
-curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s anthropic
-
-# GPT
-curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s openai
-
-# Both
-curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s all
-
-# With MCP server (for Claude Code / Cursor)
-curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s mcp
-```
-
-Set your API key if you haven't already:
+Set your API key:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
@@ -54,65 +26,32 @@ export ANTHROPIC_API_KEY=sk-ant-...
 export OPENAI_API_KEY=sk-...
 ```
 
-### Manual install
-
-```bash
-pip install 'agent-verdict[anthropic] @ git+https://github.com/sharifli4/agent-verdict.git'
-# or
-uv pip install 'agent-verdict[openai] @ git+https://github.com/sharifli4/agent-verdict.git'
-```
+Options: `sh -s anthropic`, `sh -s openai`, `sh -s all`, `sh -s mcp` (for Claude Code/Cursor).
 
 ## Usage
 
-### Command line
-
-The fastest way. No code to write:
+### CLI
 
 ```bash
-agent-verdict evaluate "SQL injection found on line 14" -c "Find security bugs"
-```
+# full pipeline
+agent-verdict evaluate "SQL injection on line 14" -c "Find security bugs"
 
-That's it. It runs the full pipeline and prints the verdict.
-
-More examples:
-
-```bash
-# pipe output from another command
+# pipe from another tool
 my-agent analyze code.py | agent-verdict eval -c "Find security bugs"
 
-# quick confidence check — 1 LLM call, fast and cheap
-agent-verdict check "the server crashed due to OOM" -c "Diagnose outage"
+# quick confidence check (1 LLM call)
+agent-verdict check "server crashed due to OOM" -c "Diagnose outage"
 
-# just the adversarial part — attack the answer, then defend it
+# adversarial only
 agent-verdict attack "race condition in pool.get()" -c "Find concurrency bugs"
-```
 
-JSON output for scripts:
-
-```bash
+# JSON output
 agent-verdict --json eval "result" -c "task" > verdict.json
 ```
 
-Exit code is `0` if the answer passes, `1` if dropped. Use it in CI, shell scripts, whatever:
+Exit code `0` = passed, `1` = dropped.
 
-```bash
-if agent-verdict check "$AGENT_OUTPUT" -c "$TASK"; then
-    echo "good to go"
-else
-    echo "rejected"
-fi
-```
-
-You don't have to specify the provider. It picks it up from your API key. But if you want to be explicit:
-
-```bash
-agent-verdict -p openai eval "result" -c "task"
-agent-verdict -p anthropic -m claude-sonnet-4-6 eval "result" -c "task"
-```
-
-### Python — decorator
-
-You already have a function. Add one line:
+### Python
 
 ```python
 from agent_verdict import verdict
@@ -123,268 +62,114 @@ llm = AnthropicProvider()
 @verdict(llm=llm, task_context="Find security bugs in Python code")
 def analyze(code: str) -> str:
     return "Found SQL injection in the login handler"
-```
 
-Before: `analyze()` returns a string. After: it returns a `Verdict` object that went through the whole gauntlet.
-
-```python
 result = analyze(user_code)
-
-result.confidence        # 0.87 — how sure the LLM is
-result.defended          # True — survived the adversarial check
-result.counter_argument  # "The query on line 42 uses parameterized..."
-result.defense           # "Line 42 uses f-string formatting, not params..."
-result.dropped           # False — answer survived
+result.confidence        # 0.87
+result.defended          # True
+result.dropped           # False
 ```
 
-If the answer is bad, it raises an error:
-
-```python
-from agent_verdict import DroppedResultError
-
-try:
-    result = analyze(bad_code)
-except DroppedResultError as e:
-    print(e.verdict.drop_reason)  # "Confidence 0.23 below threshold 0.5"
-```
-
-Don't want exceptions? Set `raise_on_drop=False` and check `result.dropped` yourself.
-
-Async works too. The decorator figures it out:
-
-```python
-@verdict(llm=llm, task_context="...")
-async def analyze(code: str) -> str:
-    return await some_async_agent(code)
-```
-
-### Python — pipeline
-
-More control:
+Or use the pipeline directly:
 
 ```python
 from agent_verdict import VerdictPipeline, VerdictConfig
 from agent_verdict.llm.openai import OpenAIProvider
 
-llm = OpenAIProvider(model="gpt-4o")
-config = VerdictConfig(confidence_threshold=0.7)
-pipeline = VerdictPipeline(llm=llm, config=config)
-
-result = await pipeline.evaluate(
-    "The root cause is a race condition in the connection pool",
-    task_context="Diagnose why requests timeout under load",
-)
+pipeline = VerdictPipeline(llm=OpenAIProvider(), config=VerdictConfig(confidence_threshold=0.7))
+result = await pipeline.evaluate("race condition in pool", task_context="Find concurrency bugs")
 ```
 
-Not using async? There's `pipeline.evaluate_sync()`.
-
-### MCP plugin (Claude Code, Cursor)
-
-Use it as a tool inside your editor:
+### MCP (Claude Code / Cursor)
 
 ```bash
-pip install "agent-verdict[mcp] @ git+https://github.com/sharifli4/agent-verdict.git"
+curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s mcp
+claude mcp add agent-verdict -- /path/to/.venv/bin/agent-verdict-mcp
 ```
 
-**Claude Code** — one command:
+Tools: `evaluate`, `check_confidence`, `adversarial_check`.
 
-```bash
-claude mcp add agent-verdict agent-verdict-mcp
-```
-
-Or add to `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "agent-verdict": {
-      "command": "agent-verdict-mcp",
-      "env": { "ANTHROPIC_API_KEY": "your-key" }
-    }
-  }
-}
-```
-
-**Cursor** — add to `.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "agent-verdict": {
-      "command": "agent-verdict-mcp",
-      "env": { "OPENAI_API_KEY": "your-key" }
-    }
-  }
-}
-```
-
-Three tools show up: `evaluate`, `check_confidence`, `adversarial_check`. Provider is auto-detected from whichever API key you set.
-
-## What you get back
-
-The `Verdict` object:
+## Verdict object
 
 ```python
-result.result              # whatever your agent originally returned
-result.confidence          # 0.0 to 1.0
-result.confidence_reason   # why it got that score
-result.context_relevance   # 0.0 to 1.0, is this answering the right question?
+result.confidence          # 0.0-1.0
+result.context_relevance   # 0.0-1.0
 result.justification       # why the answer makes sense
-result.counter_argument    # the best attack against the answer
-result.defense             # the response to that attack
-result.defended            # True/False, did the defense hold?
-result.dropped             # True/False, was the answer thrown out?
-result.drop_reason         # if dropped, why
+result.counter_argument    # best attack against the answer
+result.defense             # response to that attack
+result.defended            # did the defense hold?
+result.dropped             # was the answer rejected?
+result.drop_reason         # why it was rejected
+```
+
+## Evaluation algorithms
+
+| Algorithm | Technique | Catches |
+|-----------|-----------|---------|
+| **Confidence Scoring** | LLM rates confidence and relevance 0.0-1.0 | Low-quality or vague answers |
+| **Independent Verification** | LLM re-derives answer without seeing the original | Answers that don't hold up independently |
+| **Adversarial Dialectic** | Generate counter-argument, then defend against it | Plausible but flawed answers |
+| **Self-Consistency** | [Wang et al. 2022](https://arxiv.org/abs/2203.11171) — sample N answers, measure agreement | Unstable/unreliable answers |
+| **Cosine Similarity** | Sentence embeddings ([MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)) | Off-topic answers |
+| **NLI Entailment** | [DeBERTa-v3](https://huggingface.co/cross-encoder/nli-deberta-v3-small) classification | Hallucinated/contradicting answers |
+| **Logprob Calibration** | Token log-probabilities via `exp(mean_logprob)` | Internally uncertain answers |
+
+Default pipeline uses the first 3 (4 LLM calls). Stages 5-7 use different models, breaking the "same brain grading itself" problem.
+
+## Stages
+
+| Stage | LLM calls | Install |
+|-------|-----------|---------|
+| `ConfidenceStage` | 1 | included |
+| `VerificationStage` | 1 | included |
+| `AdversarialStage` | 2 | included |
+| `SelfConsistencyStage(n)` | 2n | included |
+| `SemanticSimilarityStage` | 0 | `pip install agent-verdict[embeddings]` |
+| `EntailmentStage` | 0 | `pip install agent-verdict[nli]` |
+| `LogprobStage` | 1 | OpenAI only |
+
+Custom pipeline:
+
+```python
+from agent_verdict import VerdictPipeline, ConfidenceStage, EntailmentStage, AdversarialStage
+
+pipeline = VerdictPipeline(llm=llm, stages=[
+    ConfidenceStage(),
+    EntailmentStage(),
+    AdversarialStage(),
+])
 ```
 
 ## Configuration
 
-Three knobs:
-
 ```python
 VerdictConfig(
-    confidence_threshold=0.5,   # below this confidence → dropped
-    relevance_threshold=0.4,    # below this relevance → dropped
-    require_defense=True,       # can't defend itself → dropped
+    confidence_threshold=0.5,   # below → dropped
+    relevance_threshold=0.4,    # below → dropped
+    require_defense=True,       # can't defend → dropped
 )
 ```
 
-CLI equivalents: `--confidence-threshold`, `--relevance-threshold`, `--no-require-defense`.
+CLI: `--confidence-threshold`, `--relevance-threshold`, `--no-require-defense`.
 
-## All available stages
-
-The default pipeline uses the first three. The rest you can mix in.
-
-### LLM-based (need an API key)
-
-| Stage | What it does | LLM calls |
-|---|---|---|
-| `ConfidenceStage` | Score confidence and relevance (0-1) | 1 |
-| `VerificationStage` | Independent re-check: "would I reach the same conclusion?" | 1 |
-| `AdversarialStage` | Generate counter-argument, then defend against it | 2 |
-| `SelfConsistencyStage` | Run the task N times independently, measure agreement | 2N |
-
-### Algorithmic (no LLM needed, run locally)
-
-| Stage | What it does | Requires |
-|---|---|---|
-| `SemanticSimilarityStage` | Embedding cosine similarity — is the answer on-topic? | `pip install agent-verdict[embeddings]` |
-| `EntailmentStage` | NLI model checks if context supports the answer | `pip install agent-verdict[nli]` |
-| `LogprobStage` | Read token log probabilities for real model uncertainty | OpenAI provider (has logprob support) |
-
-The algorithmic stages use completely different models. They break the "same brain grading itself" problem.
-
-`SemanticSimilarityStage` and `EntailmentStage` fall back to LLM-based checks if their local models aren't installed. So they always work — they're just better with the local models.
-
-### Building a custom pipeline
-
-Pick the stages you want:
+## Extend
 
 ```python
-from agent_verdict import (
-    VerdictPipeline,
-    ConfidenceStage,
-    SelfConsistencyStage,
-    EntailmentStage,
-    AdversarialStage,
-)
-
-# Cheap and fast — just confidence + embedding relevance
-pipeline = VerdictPipeline(llm=llm, stages=[
-    ConfidenceStage(),
-    SemanticSimilarityStage(),
-])
-
-# Maximum rigor — everything
-pipeline = VerdictPipeline(llm=llm, stages=[
-    SemanticSimilarityStage(),   # is it even on-topic? (local, fast)
-    EntailmentStage(),           # does the context support it? (local, fast)
-    ConfidenceStage(),           # LLM confidence score
-    SelfConsistencyStage(num_samples=5),  # 5 independent samples, vote
-    VerificationStage(),         # fresh independent check
-    AdversarialStage(),          # attack + defend
-])
-
-# Fast + different-model verification
-pipeline = VerdictPipeline(llm=llm, stages=[
-    ConfidenceStage(),
-    EntailmentStage(),           # DeBERTa, not the same LLM
-])
-```
-
-### Self-consistency details
-
-`SelfConsistencyStage` asks the LLM to solve the same task N times independently, then checks how many of those answers agree with the agent's answer. If 4 out of 5 agree, confidence is high. If all 5 disagree, the answer is probably wrong.
-
-```python
-SelfConsistencyStage(num_samples=5)  # default is 3
-```
-
-Cost: 2N LLM calls (N samples + N agreement checks). Samples run in parallel.
-
-## Extend it
-
-### Bring your own LLM
-
-One method:
-
-```python
-from agent_verdict import LLMProvider, LLMMessage, LLMResponse
-
+# Custom LLM provider
 class MyProvider(LLMProvider):
-    async def complete(self, messages: list[LLMMessage]) -> LLMResponse:
-        text = await call_whatever_llm(messages[0].content)
-        return LLMResponse(content=text)
-```
+    async def complete(self, messages):
+        return LLMResponse(content=await my_llm(messages[0].content))
 
-### Bring your own stages
-
-```python
-from agent_verdict import Stage, VerdictPipeline, ConfidenceStage
-
+# Custom stage
 class MyStage(Stage):
     async def run(self, verdict, llm, task_context, config):
         return verdict.model_copy(update={"confidence": 0.99})
-
-pipeline = VerdictPipeline(llm=llm, stages=[ConfidenceStage(), MyStage()])
 ```
 
-## How many LLM calls?
-
-Default pipeline (Confidence → Verification → Adversarial):
-
-- Confidence: 1
-- Verification: 1
-- Adversarial: 2 (attack + defend)
-- **Default: 4 total**
-
-With self-consistency (N=3): add 6 calls. With local stages (embeddings, NLI): 0 extra calls.
-
-Bad answers fail at step 1 and cost only 1 call.
-
-## Evaluation algorithms
-
-The pipeline evaluates agent results using seven algorithms, each targeting a different failure mode:
-
-| # | Algorithm | Technique | What it catches |
-|---|-----------|-----------|-----------------|
-| 1 | **LLM Confidence Scoring** | Structured prompting with JSON schema — LLM rates confidence and relevance on 0.0-1.0 scale | Low-quality or vague answers |
-| 2 | **Independent Verification** | Blind re-derivation — LLM independently solves the task without seeing the original answer, then compares | Answers that don't hold up under independent review |
-| 3 | **Adversarial Dialectic** | Two-step argue-then-defend — generates strongest counter-argument, then attempts to defend the original answer | Plausible-sounding but flawed answers |
-| 4 | **Self-Consistency Sampling** | [Wang et al. 2022](https://arxiv.org/abs/2203.11171) — samples N independent answers in parallel, measures agreement rate via majority voting | Unstable or unreliable answers where the model can't consistently reach the same conclusion |
-| 5 | **Cosine Similarity** | Sentence embeddings ([all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)) — computes `dot(a,b) / (\|\|a\|\| * \|\|b\|\|)` between task and answer vectors | Off-topic or irrelevant answers |
-| 6 | **Natural Language Inference** | NLI classification ([DeBERTa-v3](https://huggingface.co/cross-encoder/nli-deberta-v3-small)) — scores entailment, neutral, contradiction probabilities between task context and answer | Hallucinated answers that contradict the given context |
-| 7 | **Log-Probability Calibration** | Token-level logprobs — restates the answer and computes `exp(mean_logprob)` as a real internal uncertainty signal | Answers where the model sounds confident but is internally uncertain |
-
-Stages 5-7 use different models/signals than the evaluating LLM, breaking the "same brain grading itself" problem. Stages 5 and 6 fall back to LLM-based checks if their local models aren't installed.
-
-## Running tests
+## Development
 
 ```bash
 git clone https://github.com/sharifli4/agent-verdict.git
 cd agent-verdict
 pip install -e ".[dev]"
-pytest tests/ -v         # no API keys needed — tests use a mock provider
+pytest tests/ -v    # no API keys needed, uses mock provider
 ```
-
-Everything uses a mock provider. No API keys, no network calls.
