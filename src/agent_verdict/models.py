@@ -31,3 +31,28 @@ class Verdict(BaseModel):
     defended: bool = False
     dropped: bool = False
     drop_reason: str = ""
+
+
+# --- Structured output schemas for each stage ---
+
+
+class ConfidenceOutput(BaseModel):
+    confidence: float = Field(ge=0.0, le=1.0)
+    confidence_reason: str
+    context_relevance: float = Field(ge=0.0, le=1.0)
+    justification: str
+
+
+class VerificationOutput(BaseModel):
+    verified: bool
+    verification_reason: str
+    adjusted_confidence: float = Field(ge=0.0, le=1.0)
+
+
+class CounterArgumentOutput(BaseModel):
+    counter_argument: str
+
+
+class DefenseOutput(BaseModel):
+    defense: str
+    defended: bool

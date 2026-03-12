@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from agent_verdict.llm.base import LLMProvider
-from agent_verdict.models import LLMMessage, Verdict, VerdictConfig
+from agent_verdict.models import (
+    ConfidenceOutput,
+    LLMMessage,
+    Verdict,
+    VerdictConfig,
+)
 
-from .base import Stage, parse_llm_json
+from .base import Stage
 
 CONFIDENCE_PROMPT = """\
 You are evaluating an agent's output. Score its confidence and relevance to the task.
@@ -11,20 +16,8 @@ You are evaluating an agent's output. Score its confidence and relevance to the 
 Task context: {task_context}
 Agent result: {result}
 
-Respond with JSON only:
-{{
-  "confidence": <float 0.0-1.0>,
-  "confidence_reason": "<why this confidence level>",
-  "context_relevance": <float 0.0-1.0>,
-  "justification": "<brief justification of the result>"
-}}"""
-
-CONSERVATIVE_DEFAULTS = {
-    "confidence": 0.0,
-    "confidence_reason": "Failed to parse LLM evaluation",
-    "context_relevance": 0.0,
-    "justification": "",
-}
+Evaluate the confidence (0.0-1.0), context relevance (0.0-1.0), \
+provide a reason for the confidence score, and a brief justification of the result."""
 
 
 class ConfidenceStage(Stage):
@@ -38,8 +31,10 @@ class ConfidenceStage(Stage):
         prompt = CONFIDENCE_PROMPT.format(
             task_context=task_context, result=verdict.result
         )
-        response = await llm.complete([LLMMessage(role="user", content=prompt)])
-        data = parse_llm_json(response.content, CONSERVATIVE_DEFAULTS)
+        data = await llm.complete_structured(
+            [LLMMessage(role="user", content=prompt)],
+            ConfidenceOutput,
+        )
 
         confidence = float(data.get("confidence", 0.0))
         relevance = float(data.get("context_relevance", 0.0))

@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from agent_verdict.llm.base import LLMProvider
-from agent_verdict.models import LLMMessage, Verdict, VerdictConfig
+from agent_verdict.models import (
+    CounterArgumentOutput,
+    DefenseOutput,
+    LLMMessage,
+    Verdict,
+    VerdictConfig,
+)
 
-from .base import Stage, parse_llm_json
+from .base import Stage
 
 COUNTER_PROMPT = """\
 You are a critical adversarial reviewer. Find the strongest counter-argument against \
@@ -13,10 +19,7 @@ Task context: {task_context}
 Agent result: {result}
 Agent justification: {justification}
 
-Respond with JSON only:
-{{
-  "counter_argument": "<strongest counter-argument>"
-}}"""
+Provide the single strongest counter-argument."""
 
 DEFENSE_PROMPT = """\
 You are defending an agent's result against a counter-argument. Provide a rigorous \
@@ -27,20 +30,7 @@ Agent result: {result}
 Agent justification: {justification}
 Counter-argument: {counter_argument}
 
-Respond with JSON only:
-{{
-  "defense": "<your defense or admission of fault>",
-  "defended": <true/false>
-}}"""
-
-COUNTER_DEFAULTS = {
-    "counter_argument": "Failed to generate counter-argument",
-}
-
-DEFENSE_DEFAULTS = {
-    "defense": "Failed to generate defense",
-    "defended": False,
-}
+Provide your defense and whether the result is successfully defended (true/false)."""
 
 
 class AdversarialStage(Stage):
@@ -57,10 +47,10 @@ class AdversarialStage(Stage):
             result=verdict.result,
             justification=verdict.justification,
         )
-        counter_response = await llm.complete(
-            [LLMMessage(role="user", content=counter_prompt)]
+        counter_data = await llm.complete_structured(
+            [LLMMessage(role="user", content=counter_prompt)],
+            CounterArgumentOutput,
         )
-        counter_data = parse_llm_json(counter_response.content, COUNTER_DEFAULTS)
         counter_argument = str(counter_data.get("counter_argument", ""))
 
         # Step 2: Defend against counter-argument
@@ -70,10 +60,10 @@ class AdversarialStage(Stage):
             justification=verdict.justification,
             counter_argument=counter_argument,
         )
-        defense_response = await llm.complete(
-            [LLMMessage(role="user", content=defense_prompt)]
+        defense_data = await llm.complete_structured(
+            [LLMMessage(role="user", content=defense_prompt)],
+            DefenseOutput,
         )
-        defense_data = parse_llm_json(defense_response.content, DEFENSE_DEFAULTS)
 
         defended = bool(defense_data.get("defended", False))
         defense = str(defense_data.get("defense", ""))

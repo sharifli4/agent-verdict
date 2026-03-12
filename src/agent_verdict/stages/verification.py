@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from agent_verdict.llm.base import LLMProvider
-from agent_verdict.models import LLMMessage, Verdict, VerdictConfig
+from agent_verdict.models import (
+    LLMMessage,
+    Verdict,
+    VerdictConfig,
+    VerificationOutput,
+)
 
-from .base import Stage, parse_llm_json
+from .base import Stage
 
 VERIFICATION_PROMPT = """\
 You are independently verifying an agent's result. Without being influenced by the \
@@ -13,18 +18,8 @@ Task context: {task_context}
 Agent result: {result}
 Agent justification: {justification}
 
-Respond with JSON only:
-{{
-  "verified": <true/false>,
-  "verification_reason": "<your independent reasoning>",
-  "adjusted_confidence": <float 0.0-1.0>
-}}"""
-
-CONSERVATIVE_DEFAULTS = {
-    "verified": False,
-    "verification_reason": "Failed to parse LLM verification",
-    "adjusted_confidence": 0.0,
-}
+Determine if the result is verified (true/false), provide your independent reasoning, \
+and give an adjusted confidence score (0.0-1.0)."""
 
 
 class VerificationStage(Stage):
@@ -40,8 +35,10 @@ class VerificationStage(Stage):
             result=verdict.result,
             justification=verdict.justification,
         )
-        response = await llm.complete([LLMMessage(role="user", content=prompt)])
-        data = parse_llm_json(response.content, CONSERVATIVE_DEFAULTS)
+        data = await llm.complete_structured(
+            [LLMMessage(role="user", content=prompt)],
+            VerificationOutput,
+        )
 
         verified = bool(data.get("verified", False))
         adjusted = float(data.get("adjusted_confidence", verdict.confidence))
