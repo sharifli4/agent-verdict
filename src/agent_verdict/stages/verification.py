@@ -8,15 +8,19 @@ from agent_verdict.models import (
     VerificationOutput,
 )
 
-from .base import Stage
+from .base import DATA_BOUNDARY_INSTRUCTION, Stage, sanitize_for_prompt
 
 VERIFICATION_PROMPT = """\
 You are independently verifying an agent's result. Without being influenced by the \
 existing answer, consider the task and determine if you would arrive at the same conclusion.
 
-Task context: {task_context}
-Agent result: {result}
-Agent justification: {justification}
+{data_boundary}
+
+{task_context}
+
+{result}
+
+{justification}
 
 Determine if the result is verified (true/false), provide your independent reasoning, \
 and give an adjusted confidence score (0.0-1.0)."""
@@ -31,9 +35,10 @@ class VerificationStage(Stage):
         config: VerdictConfig,
     ) -> Verdict:
         prompt = VERIFICATION_PROMPT.format(
-            task_context=task_context,
-            result=verdict.result,
-            justification=verdict.justification,
+            data_boundary=DATA_BOUNDARY_INSTRUCTION,
+            task_context=sanitize_for_prompt(task_context, "task_context"),
+            result=sanitize_for_prompt(verdict.result, "agent_result"),
+            justification=sanitize_for_prompt(verdict.justification, "justification"),
         )
         data = await llm.complete_structured(
             [LLMMessage(role="user", content=prompt)],

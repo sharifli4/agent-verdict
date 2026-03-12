@@ -19,13 +19,16 @@ import math
 from agent_verdict.llm.base import LLMProvider
 from agent_verdict.models import LLMMessage, Verdict, VerdictConfig
 
-from .base import Stage
+from .base import DATA_BOUNDARY_INSTRUCTION, Stage, sanitize_for_prompt
 
 RESTATE_PROMPT = """\
 Restate the following answer in your own words. Be concise.
 
-Task: {task_context}
-Original answer: {result}
+{data_boundary}
+
+{task_context}
+
+{result}
 
 Your restatement:"""
 
@@ -41,7 +44,9 @@ class LogprobStage(Stage):
         config: VerdictConfig,
     ) -> Verdict:
         prompt = RESTATE_PROMPT.format(
-            task_context=task_context, result=verdict.result
+            data_boundary=DATA_BOUNDARY_INSTRUCTION,
+            task_context=sanitize_for_prompt(task_context, "task_context"),
+            result=sanitize_for_prompt(verdict.result, "agent_result"),
         )
 
         logprob_confidence = await self._get_logprob_confidence(

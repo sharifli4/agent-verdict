@@ -13,7 +13,7 @@ from __future__ import annotations
 from agent_verdict.llm.base import LLMProvider
 from agent_verdict.models import LLMMessage, Verdict, VerdictConfig
 
-from .base import Stage
+from .base import DATA_BOUNDARY_INSTRUCTION, Stage, sanitize_for_prompt
 
 # Light model, ~80MB, fast on CPU
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
@@ -22,8 +22,11 @@ FALLBACK_PROMPT = """\
 On a scale of 0.0 to 1.0, how semantically relevant is the following answer \
 to the given task? Consider only topical relevance, not correctness.
 
-Task: {task_context}
-Answer: {result}
+{data_boundary}
+
+{task_context}
+
+{result}
 
 Reply with a single number between 0.0 and 1.0."""
 
@@ -87,7 +90,9 @@ class SemanticSimilarityStage(Stage):
         self, llm: LLMProvider, task_context: str, verdict: Verdict
     ) -> float:
         prompt = FALLBACK_PROMPT.format(
-            task_context=task_context, result=verdict.result
+            data_boundary=DATA_BOUNDARY_INSTRUCTION,
+            task_context=sanitize_for_prompt(task_context, "task_context"),
+            result=sanitize_for_prompt(verdict.result, "agent_result"),
         )
         response = await llm.complete([LLMMessage(role="user", content=prompt)])
         try:

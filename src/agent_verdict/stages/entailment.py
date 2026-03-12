@@ -14,7 +14,7 @@ from __future__ import annotations
 from agent_verdict.llm.base import LLMProvider
 from agent_verdict.models import LLMMessage, Verdict, VerdictConfig
 
-from .base import Stage
+from .base import DATA_BOUNDARY_INSTRUCTION, Stage, sanitize_for_prompt
 
 # DeBERTa-v3 fine-tuned on NLI — fast, accurate, ~180MB
 DEFAULT_MODEL = "cross-encoder/nli-deberta-v3-small"
@@ -23,8 +23,11 @@ FALLBACK_PROMPT = """\
 Does the premise logically support or entail the hypothesis? \
 Consider only whether the premise provides evidence for the hypothesis.
 
-Premise (task context): {premise}
-Hypothesis (agent answer): {hypothesis}
+{data_boundary}
+
+{premise}
+
+{hypothesis}
 
 Reply with exactly one of: "entailment", "neutral", or "contradiction"."""
 
@@ -117,7 +120,9 @@ class EntailmentStage(Stage):
         self, llm: LLMProvider, task_context: str, verdict: Verdict
     ) -> dict[str, float]:
         prompt = FALLBACK_PROMPT.format(
-            premise=task_context, hypothesis=verdict.result
+            data_boundary=DATA_BOUNDARY_INSTRUCTION,
+            premise=sanitize_for_prompt(task_context, "premise"),
+            hypothesis=sanitize_for_prompt(verdict.result, "hypothesis"),
         )
         response = await llm.complete([LLMMessage(role="user", content=prompt)])
         text = response.content.strip().lower()

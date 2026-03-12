@@ -13,12 +13,14 @@ import asyncio
 from agent_verdict.llm.base import LLMProvider
 from agent_verdict.models import LLMMessage, Verdict, VerdictConfig
 
-from .base import Stage
+from .base import DATA_BOUNDARY_INSTRUCTION, Stage, sanitize_for_prompt
 
 REANSWER_PROMPT = """\
 Answer the following task independently. Be concise and direct.
 
-Task: {task_context}
+{data_boundary}
+
+{task_context}
 
 Provide your answer in one or two sentences."""
 
@@ -26,8 +28,11 @@ AGREEMENT_PROMPT = """\
 Do these two answers agree on the same core conclusion? \
 Ignore wording differences, focus on whether the substance matches.
 
-Answer A: {answer_a}
-Answer B: {answer_b}
+{data_boundary}
+
+{answer_a}
+
+{answer_b}
 
 Reply with exactly "yes" or "no"."""
 
@@ -48,7 +53,10 @@ class SelfConsistencyStage(Stage):
         config: VerdictConfig,
     ) -> Verdict:
         # Step 1: Generate N independent answers in parallel
-        prompt = REANSWER_PROMPT.format(task_context=task_context)
+        prompt = REANSWER_PROMPT.format(
+            data_boundary=DATA_BOUNDARY_INSTRUCTION,
+            task_context=sanitize_for_prompt(task_context, "task_context"),
+        )
         sample_tasks = [
             llm.complete([LLMMessage(role="user", content=prompt)])
             for _ in range(self.num_samples)
@@ -59,8 +67,9 @@ class SelfConsistencyStage(Stage):
         agree_tasks = []
         for sample in samples:
             agree_prompt = AGREEMENT_PROMPT.format(
-                answer_a=str(verdict.result),
-                answer_b=sample.content,
+                data_boundary=DATA_BOUNDARY_INSTRUCTION,
+                answer_a=sanitize_for_prompt(verdict.result, "answer_a"),
+                answer_b=sanitize_for_prompt(sample.content, "answer_b"),
             )
             agree_tasks.append(
                 llm.complete([LLMMessage(role="user", content=agree_prompt)])

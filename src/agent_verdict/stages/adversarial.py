@@ -9,15 +9,19 @@ from agent_verdict.models import (
     VerdictConfig,
 )
 
-from .base import Stage
+from .base import DATA_BOUNDARY_INSTRUCTION, Stage, sanitize_for_prompt
 
 COUNTER_PROMPT = """\
 You are a critical adversarial reviewer. Find the strongest counter-argument against \
 the following agent result. Be rigorous and look for flaws, assumptions, or errors.
 
-Task context: {task_context}
-Agent result: {result}
-Agent justification: {justification}
+{data_boundary}
+
+{task_context}
+
+{result}
+
+{justification}
 
 Provide the single strongest counter-argument."""
 
@@ -25,10 +29,15 @@ DEFENSE_PROMPT = """\
 You are defending an agent's result against a counter-argument. Provide a rigorous \
 defense if possible. If the counter-argument is valid and the result is wrong, admit it.
 
-Task context: {task_context}
-Agent result: {result}
-Agent justification: {justification}
-Counter-argument: {counter_argument}
+{data_boundary}
+
+{task_context}
+
+{result}
+
+{justification}
+
+{counter_argument}
 
 Provide your defense and whether the result is successfully defended (true/false)."""
 
@@ -43,9 +52,10 @@ class AdversarialStage(Stage):
     ) -> Verdict:
         # Step 1: Generate counter-argument
         counter_prompt = COUNTER_PROMPT.format(
-            task_context=task_context,
-            result=verdict.result,
-            justification=verdict.justification,
+            data_boundary=DATA_BOUNDARY_INSTRUCTION,
+            task_context=sanitize_for_prompt(task_context, "task_context"),
+            result=sanitize_for_prompt(verdict.result, "agent_result"),
+            justification=sanitize_for_prompt(verdict.justification, "justification"),
         )
         counter_data = await llm.complete_structured(
             [LLMMessage(role="user", content=counter_prompt)],
@@ -55,10 +65,11 @@ class AdversarialStage(Stage):
 
         # Step 2: Defend against counter-argument
         defense_prompt = DEFENSE_PROMPT.format(
-            task_context=task_context,
-            result=verdict.result,
-            justification=verdict.justification,
-            counter_argument=counter_argument,
+            data_boundary=DATA_BOUNDARY_INSTRUCTION,
+            task_context=sanitize_for_prompt(task_context, "task_context"),
+            result=sanitize_for_prompt(verdict.result, "agent_result"),
+            justification=sanitize_for_prompt(verdict.justification, "justification"),
+            counter_argument=sanitize_for_prompt(counter_argument, "counter_argument"),
         )
         defense_data = await llm.complete_structured(
             [LLMMessage(role="user", content=defense_prompt)],

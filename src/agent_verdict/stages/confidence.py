@@ -8,13 +8,16 @@ from agent_verdict.models import (
     VerdictConfig,
 )
 
-from .base import Stage
+from .base import DATA_BOUNDARY_INSTRUCTION, Stage, sanitize_for_prompt
 
 CONFIDENCE_PROMPT = """\
 You are evaluating an agent's output. Score its confidence and relevance to the task.
 
-Task context: {task_context}
-Agent result: {result}
+{data_boundary}
+
+{task_context}
+
+{result}
 
 Evaluate the confidence (0.0-1.0), context relevance (0.0-1.0), \
 provide a reason for the confidence score, and a brief justification of the result."""
@@ -29,7 +32,9 @@ class ConfidenceStage(Stage):
         config: VerdictConfig,
     ) -> Verdict:
         prompt = CONFIDENCE_PROMPT.format(
-            task_context=task_context, result=verdict.result
+            data_boundary=DATA_BOUNDARY_INSTRUCTION,
+            task_context=sanitize_for_prompt(task_context, "task_context"),
+            result=sanitize_for_prompt(verdict.result, "agent_result"),
         )
         data = await llm.complete_structured(
             [LLMMessage(role="user", content=prompt)],
