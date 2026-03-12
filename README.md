@@ -92,6 +92,52 @@ async def analyze(code: str) -> str:
     return await some_async_thing(code)
 ```
 
+### Command line
+
+No Python needed. Pipe output in or pass it as an argument:
+
+```bash
+# full pipeline — confidence + verification + adversarial
+agent-verdict evaluate "SQL injection found on line 14" -c "Find security bugs"
+
+# pipe from another command
+my-agent analyze code.py | agent-verdict evaluate -c "Find security bugs"
+
+# quick confidence check only (1 LLM call)
+agent-verdict check "the server crashed due to OOM" -c "Diagnose outage"
+
+# adversarial only — attack and defend
+agent-verdict attack "race condition in pool.get()" -c "Find concurrency bugs"
+```
+
+Get JSON instead of pretty output:
+
+```bash
+agent-verdict --json evaluate "result here" -c "task"
+```
+
+Exit code is `0` if the result passes, `1` if it gets dropped. So you can use it in scripts:
+
+```bash
+if agent-verdict check "$AGENT_OUTPUT" -c "$TASK" --json > verdict.json; then
+    echo "good to go"
+else
+    echo "agent answer was rejected"
+fi
+```
+
+Options:
+
+```
+-p, --provider        anthropic or openai (default: anthropic)
+-m, --model           model name (default: provider default)
+--json                output raw JSON
+-v, --verbose         show extra details
+--confidence-threshold  drop below this (default: 0.5)
+--relevance-threshold   drop below this (default: 0.4)
+--require-defense / --no-require-defense
+```
+
 ### The manual way — pipeline
 
 Same thing, more control:

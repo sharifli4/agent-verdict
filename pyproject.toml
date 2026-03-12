@@ -18,6 +18,7 @@ mcp-openai = ["mcp>=1.0", "openai>=1.0"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "mcp>=1.0"]
 
 [project.scripts]
+agent-verdict = "agent_verdict.cli:main"
 agent-verdict-mcp = "agent_verdict.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
