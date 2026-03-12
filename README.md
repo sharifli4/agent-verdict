@@ -1,5 +1,9 @@
 # agent-verdict
 
+<p align="center">
+  <img src="demo/demo.gif" alt="agent-verdict demo" width="800">
+</p>
+
 You have an AI agent. It gives you an answer. But is the answer actually good? You don't know. The agent doesn't know either. It just sounds confident.
 
 This library asks that question properly. It takes your agent's output and does three things:
