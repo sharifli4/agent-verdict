@@ -16,8 +16,18 @@ class OpenAIProvider(LLMProvider):
             import openai
         except ImportError:
             raise ImportError(
-                "Install the openai extra: pip install agent-verdict[openai]"
+                "OpenAI SDK not installed. Run:\n\n"
+                "  pip install 'agent-verdict[openai]'\n"
             )
+
+        import os
+
+        if not os.environ.get("OPENAI_API_KEY"):
+            raise RuntimeError(
+                "OPENAI_API_KEY not set. Export it first:\n\n"
+                "  export OPENAI_API_KEY=sk-...\n"
+            )
+
         self.client = openai.AsyncOpenAI()
         self.model = model
         self.max_tokens = max_tokens

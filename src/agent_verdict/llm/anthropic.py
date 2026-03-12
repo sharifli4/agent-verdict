@@ -16,8 +16,18 @@ class AnthropicProvider(LLMProvider):
             import anthropic
         except ImportError:
             raise ImportError(
-                "Install the anthropic extra: pip install agent-verdict[anthropic]"
+                "Anthropic SDK not installed. Run:\n\n"
+                "  pip install 'agent-verdict[anthropic]'\n"
             )
+
+        import os
+
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY not set. Export it first:\n\n"
+                "  export ANTHROPIC_API_KEY=sk-ant-...\n"
+            )
+
         self.client = anthropic.AsyncAnthropic()
         self.model = model
         self.max_tokens = max_tokens

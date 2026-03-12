@@ -25,30 +25,38 @@ If it fails at any step, the rest don't run. No wasted LLM calls.
 ## Install
 
 ```bash
-pip install git+https://github.com/sharifli4/agent-verdict.git
+curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh
 ```
 
-Both Anthropic and OpenAI SDKs are included. Set your API key and you're good:
+That's it. It detects your package manager (uv, pipx, pip) and installs everything. If you already have an API key set, it picks the right provider automatically.
+
+You can also specify the provider:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-...
+# Claude
+curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s anthropic
+
+# GPT
+curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s openai
+
+# Both
+curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s all
+```
+
+Set your API key if you haven't already:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
 # or
 export OPENAI_API_KEY=sk-...
 ```
 
-The tool auto-detects which provider to use based on which key is set. That's all you need.
-
-### Other ways to install
+### Manual install
 
 ```bash
-# if you use uv
-uv pip install git+https://github.com/sharifli4/agent-verdict.git
-
-# if you just want the CLI tool, isolated from everything else
-pipx install git+https://github.com/sharifli4/agent-verdict.git
-
-# run it once without installing
-uvx --from git+https://github.com/sharifli4/agent-verdict.git agent-verdict --help
+pip install 'agent-verdict[anthropic] @ git+https://github.com/sharifli4/agent-verdict.git'
+# or
+uv pip install 'agent-verdict[openai] @ git+https://github.com/sharifli4/agent-verdict.git'
 ```
 
 ## Usage
@@ -373,7 +381,7 @@ Stages 5-7 use different models/signals than the evaluating LLM, breaking the "s
 git clone https://github.com/sharifli4/agent-verdict.git
 cd agent-verdict
 pip install -e ".[dev]"
-pytest tests/ -v
+pytest tests/ -v         # no API keys needed — tests use a mock provider
 ```
 
 Everything uses a mock provider. No API keys, no network calls.

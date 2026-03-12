@@ -41,17 +41,27 @@ def _detect_provider() -> str:
         return "anthropic"
     if os.environ.get("OPENAI_API_KEY"):
         return "openai"
-    return "anthropic"  # default, will fail with a clear error from the SDK
+    print(
+        "Error: No API key found. Set one of:\n\n"
+        "  export ANTHROPIC_API_KEY=sk-ant-...\n"
+        "  export OPENAI_API_KEY=sk-...\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def _get_provider(provider_name: str | None, model: str | None):
     name = provider_name or _detect_provider()
-    if name == "openai":
-        from .llm.openai import OpenAIProvider
-        return OpenAIProvider(model=model) if model else OpenAIProvider()
-    else:
-        from .llm.anthropic import AnthropicProvider
-        return AnthropicProvider(model=model) if model else AnthropicProvider()
+    try:
+        if name == "openai":
+            from .llm.openai import OpenAIProvider
+            return OpenAIProvider(model=model) if model else OpenAIProvider()
+        else:
+            from .llm.anthropic import AnthropicProvider
+            return AnthropicProvider(model=model) if model else AnthropicProvider()
+    except (ImportError, RuntimeError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def _print_verdict(v: Verdict, verbose: bool = False) -> None:

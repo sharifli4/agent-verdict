@@ -1,3 +1,3 @@
-from agent_verdict.mcp_server import main
+from agent_verdict.cli import main
 
 main()
