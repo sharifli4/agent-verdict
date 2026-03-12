@@ -1,40 +1,38 @@
 # agent-verdict
 
-Your agent returned an answer. But should you trust it?
+You have an AI agent. It gives you an answer. But is the answer actually good? You don't know. The agent doesn't know either. It just sounds confident.
 
-agent-verdict takes the raw output of any agent and runs it through a gauntlet: score its confidence, independently verify it, then try to tear it apart with counter-arguments. If the result survives, you get a structured `Verdict` with everything that happened along the way. If it doesn't, the result gets dropped before it reaches your users.
+This library asks that question properly. It takes your agent's output and does three things:
 
-## How it works
+1. **"How sure are you?"** — Scores the answer 0 to 1. Low score? Thrown out immediately.
+2. **"Would you say the same thing if I asked you fresh?"** — A second, independent check. If the answer doesn't hold up on its own, it's gone.
+3. **"Here's the best argument against you. Defend yourself."** — Generates a counter-argument, then tries to defend the original answer. If the defense fails, the answer is dropped.
 
-The pipeline has three stages, run in order:
+If the answer survives all three, you get it back with all the details — the scores, the reasoning, the counter-argument, the defense. If it doesn't survive, you know exactly why.
+
+That's it. That's the whole thing.
 
 ```
-Agent Output → Confidence → Verification → Adversarial → Verdict
+Your agent's answer → Confidence check → Verification → Adversarial attack → Verdict
 ```
 
-1. **Confidence** — An LLM scores how confident it is in the result (0-1) and how relevant the result is to the task context. If either score falls below your thresholds, the result is dropped immediately. No point verifying garbage.
-
-2. **Verification** — A separate LLM call looks at the result fresh and asks: "Would I arrive at the same conclusion independently?" If not, dropped.
-
-3. **Adversarial** — Two LLM calls. First, generate the strongest possible counter-argument against the result. Then, try to defend against it. If the defense fails, the result is dropped.
-
-The pipeline exits early. If confidence is too low, verification and adversarial stages never run — no wasted LLM calls.
+If it fails at any step, the rest don't run. No wasted LLM calls.
 
 ## Install
 
 ```bash
 pip install agent-verdict
 
-# with a provider
+# pick your LLM provider
 pip install agent-verdict[anthropic]
 pip install agent-verdict[openai]
 ```
 
-## Quick start
+## Usage
 
-### Decorator
+### The simple way — decorator
 
-The fastest way. Wrap your agent function, and the return value goes through the full pipeline before coming back:
+You already have a function that does something. Add one line:
 
 ```python
 from agent_verdict import verdict
@@ -42,30 +40,35 @@ from agent_verdict.llm.anthropic import AnthropicProvider
 
 llm = AnthropicProvider()
 
-@verdict(llm=llm, task_context="Identify security vulnerabilities in Python code")
+@verdict(llm=llm, task_context="Find security bugs in Python code")
 def analyze(code: str) -> str:
-    # your agent logic here
     return "Found SQL injection in the login handler"
-
-result = analyze(user_code)  # returns a Verdict, not a string
-print(result.confidence)       # 0.87
-print(result.defended)         # True
-print(result.counter_argument) # "The parameterized query on line 42 might..."
-print(result.defense)          # "Line 42 uses string formatting, not params..."
 ```
 
-If the result gets dropped, the decorator raises `DroppedResultError` by default:
+Before: `analyze()` returns a string. After: it returns a `Verdict` object that went through the whole gauntlet.
+
+```python
+result = analyze(user_code)
+
+result.confidence        # 0.87 — how sure the LLM is
+result.defended          # True — survived the adversarial check
+result.counter_argument  # "The query on line 42 uses parameterized..."
+result.defense           # "Line 42 uses f-string formatting, not params..."
+result.dropped           # False — answer survived
+```
+
+If the answer is bad, it blows up by default:
 
 ```python
 from agent_verdict import DroppedResultError
 
 try:
-    result = analyze(user_code)
+    result = analyze(bad_code)
 except DroppedResultError as e:
     print(e.verdict.drop_reason)  # "Confidence 0.23 below threshold 0.5"
 ```
 
-Or suppress the exception and check manually:
+Don't want exceptions? Fine:
 
 ```python
 @verdict(llm=llm, task_context="...", raise_on_drop=False)
@@ -74,111 +77,105 @@ def analyze(code: str) -> str:
 
 result = analyze(code)
 if result.dropped:
-    print(result.drop_reason)
+    print(f"Answer rejected: {result.drop_reason}")
 ```
 
-Works with async functions too — the decorator detects it automatically:
+Async works too. The decorator figures it out:
 
 ```python
 @verdict(llm=llm, task_context="...")
 async def analyze(code: str) -> str:
-    return await some_async_agent(code)
+    return await some_async_thing(code)
 ```
 
-### Pipeline
+### The manual way — pipeline
 
-For more control, use `VerdictPipeline` directly:
+Same thing, more control:
 
 ```python
 from agent_verdict import VerdictPipeline, VerdictConfig
 from agent_verdict.llm.openai import OpenAIProvider
 
 llm = OpenAIProvider(model="gpt-4o")
-config = VerdictConfig(confidence_threshold=0.7, require_defense=True)
+config = VerdictConfig(confidence_threshold=0.7)
 pipeline = VerdictPipeline(llm=llm, config=config)
 
-verdict = await pipeline.evaluate(
+result = await pipeline.evaluate(
     "The root cause is a race condition in the connection pool",
     task_context="Diagnose why requests timeout under load",
 )
 ```
 
-There's `evaluate_sync()` if you're not in an async context.
+Not using async? There's `pipeline.evaluate_sync()`.
 
-## The Verdict object
+## What you get back
 
-Everything the pipeline produces ends up here:
+The `Verdict` object has everything:
 
 ```python
-class Verdict:
-    result: Any               # the original agent output
-    justification: str        # why the result makes sense
-    confidence: float         # 0.0 - 1.0
-    confidence_reason: str    # explanation of the score
-    context_relevance: float  # 0.0 - 1.0, how on-topic the result is
-    counter_argument: str     # best argument against the result
-    defense: str              # response to the counter-argument
-    defended: bool            # did the defense hold up?
-    dropped: bool             # was the result rejected?
-    drop_reason: str          # why it was dropped (if it was)
+result.result              # whatever your agent originally returned
+result.confidence          # 0.0 to 1.0
+result.confidence_reason   # why it got that score
+result.context_relevance   # 0.0 to 1.0, is this even answering the right question?
+result.justification       # why the answer makes sense
+result.counter_argument    # the best attack against the answer
+result.defense             # the response to that attack
+result.defended            # True/False, did the defense hold?
+result.dropped             # True/False, was the answer thrown out?
+result.drop_reason         # if dropped, why
 ```
 
 ## Configuration
 
-`VerdictConfig` controls when results get dropped:
+Three knobs:
 
 ```python
 VerdictConfig(
-    confidence_threshold=0.5,   # drop below this confidence
-    relevance_threshold=0.4,    # drop below this relevance
-    require_defense=True,       # drop if adversarial defense fails
+    confidence_threshold=0.5,   # below this confidence → dropped
+    relevance_threshold=0.4,    # below this relevance → dropped
+    require_defense=True,       # can't defend itself → dropped
 )
 ```
 
-## Custom stages
+## Bring your own LLM
 
-You don't have to use the default three stages. Subclass `Stage` and pass your own list:
-
-```python
-from agent_verdict import Stage, Verdict, VerdictConfig
-from agent_verdict.llm.base import LLMProvider
-
-class MyCustomStage(Stage):
-    async def run(
-        self, verdict: Verdict, llm: LLMProvider,
-        task_context: str, config: VerdictConfig,
-    ) -> Verdict:
-        # do your thing, return a new verdict
-        return verdict.model_copy(update={"confidence": 0.99})
-
-pipeline = VerdictPipeline(
-    llm=llm,
-    stages=[ConfidenceStage(), MyCustomStage()],  # skip verification, skip adversarial
-)
-```
-
-Stages are pure — they take a `Verdict` and return a new one. They never mutate the input.
-
-## Custom LLM providers
-
-Implement the `LLMProvider` abstract class:
+Implement one method:
 
 ```python
 from agent_verdict import LLMProvider, LLMMessage, LLMResponse
 
 class MyProvider(LLMProvider):
     async def complete(self, messages: list[LLMMessage]) -> LLMResponse:
-        text = await call_my_llm(messages[0].content)
+        text = await call_whatever_llm_you_want(messages[0].content)
         return LLMResponse(content=text)
 ```
 
-That's the only method you need. `complete_sync()` has a default implementation that wraps `complete()` with `asyncio.run`.
+Done.
+
+## Bring your own stages
+
+Don't like the default three stages? Swap them out:
+
+```python
+from agent_verdict import Stage, Verdict, VerdictConfig, VerdictPipeline, ConfidenceStage
+from agent_verdict.llm.base import LLMProvider
+
+class MyStage(Stage):
+    async def run(self, verdict, llm, task_context, config):
+        # do whatever you want
+        return verdict.model_copy(update={"confidence": 0.99})
+
+pipeline = VerdictPipeline(
+    llm=llm,
+    stages=[ConfidenceStage(), MyStage()],  # only these two run
+)
+```
+
+Each stage gets a `Verdict` in, returns a new `Verdict` out. They don't touch each other.
 
 ## MCP server (Claude Code, Cursor)
 
-agent-verdict ships as an MCP server, so you can use it as a tool inside Claude Code, Cursor, or anything that speaks MCP.
-
-### Install
+Want to use this inside your editor instead of in code? It works as an MCP plugin.
 
 ```bash
 pip install agent-verdict[mcp-anthropic]
@@ -188,7 +185,7 @@ pip install agent-verdict[mcp-openai]
 
 ### Claude Code
 
-Add to your project's `.mcp.json`:
+Add to `.mcp.json` in your project:
 
 ```json
 {
@@ -196,15 +193,14 @@ Add to your project's `.mcp.json`:
     "agent-verdict": {
       "command": "agent-verdict-mcp",
       "env": {
-        "ANTHROPIC_API_KEY": "your-key",
-        "VERDICT_PROVIDER": "anthropic"
+        "ANTHROPIC_API_KEY": "your-key"
       }
     }
   }
 }
 ```
 
-Or add it from the command line:
+Or from the terminal:
 
 ```bash
 claude mcp add agent-verdict agent-verdict-mcp
@@ -212,7 +208,7 @@ claude mcp add agent-verdict agent-verdict-mcp
 
 ### Cursor
 
-In `.cursor/mcp.json`:
+Add to `.cursor/mcp.json`:
 
 ```json
 {
@@ -228,31 +224,31 @@ In `.cursor/mcp.json`:
 }
 ```
 
-### Available tools
+### What tools you get
 
-Once connected, you get three tools:
+Three tools show up in your editor:
 
-- **`evaluate`** — Full pipeline. Confidence + verification + adversarial. Pass a result and task context, get back a complete verdict.
-- **`check_confidence`** — Just the confidence stage. Quick sanity check without burning 4 LLM calls.
-- **`adversarial_check`** — Just the adversarial stage. You already trust the result, but want to poke holes in it.
-
-All tools accept `confidence_threshold`, `relevance_threshold`, and `require_defense` parameters to control drop behavior.
+- **`evaluate`** — The full pipeline. All three stages. Give it a result and context, get back a verdict.
+- **`check_confidence`** — Just the confidence score. Quick and cheap, one LLM call.
+- **`adversarial_check`** — Just the attack/defend part. For when you trust the answer but want to stress-test it.
 
 ### Environment variables
 
-| Variable | Default | Description |
+| Variable | Default | What it does |
 |---|---|---|
-| `VERDICT_PROVIDER` | `anthropic` | `anthropic` or `openai` |
-| `VERDICT_MODEL` | provider default | Model name to use |
+| `VERDICT_PROVIDER` | `anthropic` | Which LLM to use: `anthropic` or `openai` |
+| `VERDICT_MODEL` | provider default | Specific model name |
 
-The server reads API keys from the standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
+API keys come from the usual places (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`).
 
-## Design notes
+## How many LLM calls does this make?
 
-- **No retry logic.** The underlying SDK (anthropic, openai, etc.) handles retries. This library doesn't add another layer.
-- **Conservative on failure.** If the LLM returns malformed JSON, the stage falls back to safe defaults (zero confidence, defense failed). The result gets dropped rather than passed through with garbage data.
-- **Stages don't know about each other.** Each stage reads from the Verdict and writes a new one. You can reorder them, remove them, or add your own.
-- **LLM calls are the minimum needed.** Confidence = 1 call. Verification = 1 call. Adversarial = 2 calls (counter + defense). Full pipeline = 4 calls total, fewer if it exits early.
+- Confidence: 1 call
+- Verification: 1 call
+- Adversarial: 2 calls (attack + defend)
+- **Full pipeline: 4 calls total**
+
+But if the answer fails early (low confidence), the rest don't run. Could be as few as 1 call.
 
 ## Running tests
 
@@ -261,4 +257,4 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
-All tests use a `MockLLMProvider` — no API keys needed.
+Everything uses a mock LLM provider. No API keys needed, no network calls.
