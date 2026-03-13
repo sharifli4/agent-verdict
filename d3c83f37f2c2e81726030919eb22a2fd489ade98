@@ -1,0 +1,323 @@
+README.md
+  567f0900cc409961 89
+src/agent_verdict/mcp_server.py
+  567f0900cc409961 22-43,49-53,94-107,111-115,123,135-136,194-282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.11",
+  "base_commit_sha": "d3c83f37f2c2e81726030919eb22a2fd489ade98",
+  "prompts": {
+    "567f0900cc409961": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ccf91734-758c-46fd-ad68-ef0dd29996d9",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kenan Sharifli <kenansharifov400@gmail.com>",
+      "messages": [
+        {
+          "type": "user",
+          "text": "does that project actually use Self-Consistency    Wang et al. 2022 — sample N answers, measure agreement    Unstable/unreliable answers for evaluating/measure confidence of agent?",
+          "timestamp": "2026-03-13T08:02:13.956Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "pattern": "self.consistency|self_consistency|Self.Consistency|sample.*agreement|multiple.*samples"
+          },
+          "timestamp": "2026-03-13T08:02:21.669Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "pattern": "consistency"
+          },
+          "timestamp": "2026-03-13T08:02:21.795Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/self_consistency.py"
+          },
+          "timestamp": "2026-03-13T08:02:24.418Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Yes, it does. `src/agent_verdict/stages/self_consistency.py` implements exactly that technique:\n\n1. **Samples N independent answers** (default 3) by asking the LLM to solve the same task N times in parallel\n2. **Measures agreement** — each sample is compared to the agent's original answer via a yes/no agreement check\n3. **Computes an agreement rate** (`agree_count / num_samples`) and uses it as a confidence signal\n4. **Drops the result** if the agreement rate falls below the configured confidence threshold\n\nIt blends the self-consistency score with any existing confidence by taking the minimum of the two (line 86), so a low agreement rate will always pull confidence down. It's a fairly faithful implementation of the Wang et al. 2022 idea applied as an evaluation/confidence stage in the pipeline.",
+          "timestamp": "2026-03-13T08:02:31.409Z"
+        },
+        {
+          "type": "user",
+          "text": "it apply for each request yes?",
+          "timestamp": "2026-03-13T08:02:55.498Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Grep",
+          "input": {
+            "-i": true,
+            "pattern": "SelfConsistency|self_consistency"
+          },
+          "timestamp": "2026-03-13T08:02:59.070Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/__init__.py"
+          },
+          "timestamp": "2026-03-13T08:03:02.193Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/__init__.py"
+          },
+          "timestamp": "2026-03-13T08:03:02.596Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/pipeline.py"
+          },
+          "timestamp": "2026-03-13T08:03:05.340Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Not by default. `SelfConsistencyStage` is **not** in the default pipeline. \n\nThe default stages (line 19-23 of `pipeline.py`) are:\n1. `ConfidenceStage`\n2. `VerificationStage`\n3. `AdversarialStage`\n\nSelf-consistency is opt-in — the user has to explicitly include it when constructing the pipeline:\n\n```python\npipeline = VerdictPipeline(\n    llm=llm,\n    stages=[ConfidenceStage(), SelfConsistencyStage(), ...]\n)\n```\n\nSo it doesn't run on every request unless the user adds it to their stages list. This makes sense given it's expensive (N extra LLM calls per evaluation).",
+          "timestamp": "2026-03-13T08:03:13.759Z"
+        },
+        {
+          "type": "user",
+          "text": "when I use mcp, how can I activate it ?",
+          "timestamp": "2026-03-13T08:03:43.832Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Grep",
+          "input": {
+            "glob": "*.py",
+            "pattern": "mcp|MCP"
+          },
+          "timestamp": "2026-03-13T08:03:49.432Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py"
+          },
+          "timestamp": "2026-03-13T08:03:53.845Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Currently you **can't** activate `SelfConsistencyStage` via MCP — the MCP server hardcodes the default pipeline stages and doesn't expose an option to add it.\n\nThe `evaluate` tool (line 93) creates `VerdictPipeline(llm=..., config=config)` without passing custom `stages`, so it always uses the default 3 stages (Confidence → Verification → Adversarial).\n\nTo enable it, you'd need to either:\n\n1. **Add a parameter** to the `evaluate` MCP tool (e.g. `enable_self_consistency: bool = False`) that conditionally includes `SelfConsistencyStage` in the stages list\n2. **Add a dedicated MCP tool** like the existing `adversarial_check` but for self-consistency\n\nWant me to implement one of these options?",
+          "timestamp": "2026-03-13T08:04:00.968Z"
+        },
+        {
+          "type": "user",
+          "text": "what would be good for that scenario?",
+          "timestamp": "2026-03-13T08:04:35.405Z"
+        },
+        {
+          "type": "assistant",
+          "text": "I'd go with **both**, since they serve different use cases:\n\n1. **A `stages` parameter on `evaluate`** — let users pass a list of stage names (e.g. `[\"confidence\", \"verification\", \"self_consistency\"]`) instead of always using the hardcoded default. This scales to all stages without adding a boolean per stage.\n\n2. **A standalone `self_consistency_check` tool** — matches the existing pattern (`check_confidence`, `adversarial_check`). Useful when someone just wants to stress-test answer stability without the full pipeline.\n\nThe `stages` parameter is the more important one — it makes the MCP server flexible for any combination of stages, not just self-consistency. The standalone tool is a convenience for the common case.\n\nWant me to implement them?",
+          "timestamp": "2026-03-13T08:04:48.544Z"
+        },
+        {
+          "type": "user",
+          "text": "I didnt catch, how I gonna use it in mcp? what should I define ?",
+          "timestamp": "2026-03-13T08:05:14.995Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Ah, I think you're asking about how you'd actually configure/use it as an MCP user — not about the implementation.\n\nThe answer is: **you don't need to define anything extra**. MCP tools are just callable functions. When you connect the agent-verdict MCP server, the tools (`evaluate`, `check_confidence`, `adversarial_check`) appear automatically for the AI agent to call.\n\nThe problem is that **right now there's no MCP tool exposed for self-consistency**. So the AI agent simply has no way to trigger it.\n\nIf I add a `self_consistency_check` tool to the MCP server, it would just appear alongside the other tools — no config change on your side. The AI agent would see it and could call it like:\n\n```\nself_consistency_check(\n  result=\"The capital of France is Paris\",\n  task_context=\"What is the capital of France?\",\n  num_samples=3\n)\n```\n\nOr if I add a `stages` parameter to `evaluate`, you'd call:\n\n```\nevaluate(\n  result=\"...\",\n  task_context=\"...\",\n  stages=[\"confidence\", \"verification\", \"self_consistency\"]\n)\n```\n\nYour MCP server config stays the same either way — just the `agent-verdict-mcp` command. Want me to add these tools?",
+          "timestamp": "2026-03-13T08:05:24.707Z"
+        },
+        {
+          "type": "user",
+          "text": "great, lets add",
+          "timestamp": "2026-03-13T08:05:52.543Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/__init__.py"
+          },
+          "timestamp": "2026-03-13T08:05:57.691Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "from .models import VerdictConfig\nfrom .stages import (\n    AdversarialStage,\n    ConfidenceStage,\n    EntailmentStage,\n    LogprobStage,\n    SelfConsistencyStage,\n    SemanticSimilarityStage,\n    Stage,\n    VerificationStage,\n)\n\nSTAGE_REGISTRY: dict[str, type[Stage]] = {\n    \"confidence\": ConfidenceStage,\n    \"verification\": VerificationStage,\n    \"adversarial\": AdversarialStage,\n    \"self_consistency\": SelfConsistencyStage,\n    \"semantic_similarity\": SemanticSimilarityStage,\n    \"entailment\": EntailmentStage,\n    \"logprob\": LogprobStage,\n}\n\nDEFAULT_STAGES = [\"confidence\", \"verification\", \"adversarial\"]",
+            "old_string": "from .models import VerdictConfig",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-13T08:06:08.826Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Let me check the README to see all the stages/tools defined there.",
+          "timestamp": "2026-03-13T08:06:18.364Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md"
+          },
+          "timestamp": "2026-03-13T08:06:18.365Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now I see — the README lists 7 stages but MCP only exposes 3 tools. Let me add both the `stages` parameter to `evaluate` and standalone tools for the remaining stages.",
+          "timestamp": "2026-03-13T08:06:24.527Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py"
+          },
+          "timestamp": "2026-03-13T08:06:25.321Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now let me rewrite the MCP server with all stages as tools plus the `stages` parameter on `evaluate`.",
+          "timestamp": "2026-03-13T08:06:29.437Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "def _build_stages(stage_names: list[str]) -> list[Stage]:\n    \"\"\"Build stage instances from a list of stage names.\"\"\"\n    stages = []\n    for name in stage_names:\n        cls = STAGE_REGISTRY.get(name)\n        if cls is None:\n            raise ValueError(\n                f\"Unknown stage '{name}'. \"\n                f\"Available: {', '.join(STAGE_REGISTRY)}\"\n            )\n        stages.append(cls())\n    return stages\n\n\n@mcp.tool(\n    name=\"evaluate\",\n    description=(\n        \"Run the verdict pipeline on an agent result. \"\n        \"By default runs: confidence → verification → adversarial. \"\n        \"Pass 'stages' to customize which stages run and in what order. \"\n        \"Available stages: confidence, verification, adversarial, \"\n        \"self_consistency, semantic_similarity, entailment, logprob. \"\n        \"Returns a structured verdict with confidence, justification, \"\n        \"counter-arguments, defense, and whether the result was dropped.\"\n    ),\n)\nasync def evaluate(\n    result: str,\n    task_context: str,\n    stages: list[str] | None = None,\n    confidence_threshold: float = 0.5,\n    relevance_threshold: float = 0.4,\n    require_defense: bool = True,\n) -> str:\n    from .pipeline import VerdictPipeline\n\n    config = VerdictConfig(\n        confidence_threshold=confidence_threshold,\n        relevance_threshold=relevance_threshold,\n        require_defense=require_defense,\n    )\n    stage_instances = _build_stages(stages or DEFAULT_STAGES)\n    pipeline = VerdictPipeline(llm=_get_provider(), config=config, stages=stage_instances)\n    verdict = await pipeline.evaluate(result, task_context=task_context)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\n@mcp.tool(\n    name=\"check_confidence\",\n    description=(\n        \"Quick confidence check on an agent result without running the full pipeline. \"\n        \"Returns confidence score, relevance score, justification, and whether \"\n        \"the result would be dropped based on thresholds.\"\n    ),\n)\nasync def check_confidence(\n    result: str,\n    task_context: str,\n    confidence_threshold: float = 0.5,\n    relevance_threshold: float = 0.4,\n) -> str:\n    from .pipeline import VerdictPipeline\n\n    config = VerdictConfig(\n        confidence_threshold=confidence_threshold,\n        relevance_threshold=relevance_threshold,\n    )\n    pipeline = VerdictPipeline(\n        llm=_get_provider(),\n        config=config,\n        stages=[ConfidenceStage()],\n    )\n    verdict = await pipeline.evaluate(result, task_context=task_context)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\n@mcp.tool(\n    name=\"adversarial_check\",\n    description=(\n        \"Run only the adversarial stage: generate the strongest counter-argument \"\n        \"against a result, then attempt to defend it. Useful when you already \"\n        \"trust the result but want to stress-test it.\"\n    ),\n)\nasync def adversarial_check(\n    result: str,\n    task_context: str,\n    justification: str = \"\",\n    require_defense: bool = True,\n) -> str:\n    from .models import Verdict\n\n    config = VerdictConfig(require_defense=require_defense)\n    llm = _get_provider()\n    stage = AdversarialStage()\n    verdict = Verdict(result=result, justification=justification)\n    verdict = await stage.run(verdict, llm, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\n@mcp.tool(\n    name=\"self_consistency_check\",\n    description=(\n        \"Self-Consistency check (Wang et al. 2022): sample N independent answers \"\n        \"to the same task and measure how many agree with the agent's result. \"\n        \"High agreement = high confidence. Catches unstable/unreliable answers.\"\n    ),\n)\nasync def self_consistency_check(\n    result: str,\n    task_context: str,\n    num_samples: int = 3,\n    confidence_threshold: float = 0.5,\n) -> str:\n    from .models import Verdict\n\n    config = VerdictConfig(confidence_threshold=confidence_threshold)\n    llm = _get_provider()\n    stage = SelfConsistencyStage(num_samples=num_samples)\n    verdict = Verdict(result=result)\n    verdict = await stage.run(verdict, llm, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\n@mcp.tool(\n    name=\"semantic_similarity_check\",\n    description=(\n        \"Check semantic similarity between the agent's result and an independent \"\n        \"re-derivation using sentence embeddings (MiniLM). Catches off-topic answers. \"\n        \"Requires: pip install 'agent-verdict[embeddings]'\"\n    ),\n)\nasync def semantic_similarity_check(\n    result: str,\n    task_context: str,\n    confidence_threshold: float = 0.5,\n) -> str:\n    from .models import Verdict\n\n    config = VerdictConfig(confidence_threshold=confidence_threshold)\n    llm = _get_provider()\n    stage = SemanticSimilarityStage()\n    verdict = Verdict(result=result)\n    verdict = await stage.run(verdict, llm, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\n@mcp.tool(\n    name=\"entailment_check\",\n    description=(\n        \"NLI entailment check using DeBERTa-v3: verifies whether an independent \"\n        \"re-derivation entails the agent's answer. Catches hallucinated or \"\n        \"contradicting answers. Requires: pip install 'agent-verdict[nli]'\"\n    ),\n)\nasync def entailment_check(\n    result: str,\n    task_context: str,\n    confidence_threshold: float = 0.5,\n) -> str:\n    from .models import Verdict\n\n    config = VerdictConfig(confidence_threshold=confidence_threshold)\n    llm = _get_provider()\n    stage = EntailmentStage()\n    verdict = Verdict(result=result)\n    verdict = await stage.run(verdict, llm, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\n@mcp.tool(\n    name=\"logprob_check\",\n    description=(\n        \"Token log-probability calibration: measures the LLM's internal certainty \"\n        \"about the answer via exp(mean_logprob). Catches internally uncertain answers. \"\n        \"Requires OpenAI provider.\"\n    ),\n)\nasync def logprob_check(\n    result: str,\n    task_context: str,\n    confidence_threshold: float = 0.5,\n) -> str:\n    from .models import Verdict\n\n    config = VerdictConfig(confidence_threshold=confidence_threshold)\n    llm = _get_provider()\n    stage = LogprobStage()\n    verdict = Verdict(result=result)\n    verdict = await stage.run(verdict, llm, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)",
+            "old_string": "@mcp.tool(\n    name=\"evaluate\",\n    description=(\n        \"Run the full verdict pipeline on an agent result: confidence scoring, \"\n        \"independent verification, and adversarial counter-argument/defense. \"\n        \"Returns a structured verdict with confidence, justification, \"\n        \"counter-arguments, defense, and whether the result was dropped.\"\n    ),\n)\nasync def evaluate(\n    result: str,\n    task_context: str,\n    confidence_threshold: float = 0.5,\n    relevance_threshold: float = 0.4,\n    require_defense: bool = True,\n) -> str:\n    from .pipeline import VerdictPipeline\n\n    config = VerdictConfig(\n        confidence_threshold=confidence_threshold,\n        relevance_threshold=relevance_threshold,\n        require_defense=require_defense,\n    )\n    pipeline = VerdictPipeline(llm=_get_provider(), config=config)\n    verdict = await pipeline.evaluate(result, task_context=task_context)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\n@mcp.tool(\n    name=\"check_confidence\",\n    description=(\n        \"Quick confidence check on an agent result without running the full pipeline. \"\n        \"Returns confidence score, relevance score, justification, and whether \"\n        \"the result would be dropped based on thresholds.\"\n    ),\n)\nasync def check_confidence(\n    result: str,\n    task_context: str,\n    confidence_threshold: float = 0.5,\n    relevance_threshold: float = 0.4,\n) -> str:\n    from .pipeline import VerdictPipeline\n    from .stages import ConfidenceStage\n\n    config = VerdictConfig(\n        confidence_threshold=confidence_threshold,\n        relevance_threshold=relevance_threshold,\n    )\n    pipeline = VerdictPipeline(\n        llm=_get_provider(),\n        config=config,\n        stages=[ConfidenceStage()],\n    )\n    verdict = await pipeline.evaluate(result, task_context=task_context)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\n@mcp.tool(\n    name=\"adversarial_check\",\n    description=(\n        \"Run only the adversarial stage: generate the strongest counter-argument \"\n        \"against a result, then attempt to defend it. Useful when you already \"\n        \"trust the result but want to stress-test it.\"\n    ),\n)\nasync def adversarial_check(\n    result: str,\n    task_context: str,\n    justification: str = \"\",\n    require_defense: bool = True,\n) -> str:\n    from .models import Verdict\n    from .stages import AdversarialStage\n\n    config = VerdictConfig(require_defense=require_defense)\n    llm = _get_provider()\n    stage = AdversarialStage()\n    verdict = Verdict(result=result, justification=justification)\n    verdict = await stage.run(verdict, llm, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-13T08:06:54.195Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the MCP instructions to reflect all available tools.",
+          "timestamp": "2026-03-13T08:08:06.052Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "    instructions=(\n        \"Tools for evaluating agent outputs with confidence scoring, \"\n        \"independent verification, adversarial self-checking, self-consistency, \"\n        \"semantic similarity, NLI entailment, and logprob calibration. \"\n        \"Use 'evaluate' to run a customizable pipeline (pass 'stages' to pick which). \"\n        \"Use individual tools (check_confidence, adversarial_check, self_consistency_check, \"\n        \"semantic_similarity_check, entailment_check, logprob_check) to run a single stage.\"\n    ),",
+            "old_string": "    instructions=(\n        \"Tools for evaluating agent outputs with confidence scoring, \"\n        \"independent verification, and adversarial self-checking. \"\n        \"Use 'evaluate' to run the full pipeline on any result you want to verify. \"\n        \"Use 'check_confidence' for a quick confidence check without the full pipeline.\"\n    ),",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-13T08:08:09.399Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the README to reflect the new MCP tools.",
+          "timestamp": "2026-03-13T08:08:27.415Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "new_string": "Tools: `evaluate` (customizable via `stages` param), `check_confidence`, `adversarial_check`, `self_consistency_check`, `semantic_similarity_check`, `entailment_check`, `logprob_check`.",
+            "old_string": "Tools: `evaluate`, `check_confidence`, `adversarial_check`.",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-13T08:08:28.867Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now let me run the tests.",
+          "timestamp": "2026-03-13T08:08:45.402Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/tests/test_mcp_server.py"
+          },
+          "timestamp": "2026-03-13T08:08:45.824Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "python -m pytest tests/test_mcp_server.py -v 2>&1 | tail -30",
+            "description": "Run MCP server tests"
+          },
+          "timestamp": "2026-03-13T08:08:52.506Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "uv run pytest tests/test_mcp_server.py -v 2>&1 | tail -30",
+            "description": "Run MCP server tests with uv"
+          },
+          "timestamp": "2026-03-13T08:09:07.353Z"
+        },
+        {
+          "type": "assistant",
+          "text": "All existing tests pass. Let me also run the full test suite to make sure nothing broke.",
+          "timestamp": "2026-03-13T08:09:12.998Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "uv run pytest tests/ -v 2>&1 | tail -40",
+            "description": "Run full test suite"
+          },
+          "timestamp": "2026-03-13T08:09:13.418Z"
+        },
+        {
+          "type": "assistant",
+          "text": "All 76 tests pass. Here's what was added:\n\n**`evaluate` tool** — now accepts an optional `stages` parameter:\n```\nstages: [\"confidence\", \"verification\", \"self_consistency\", \"adversarial\"]\n```\nAvailable stage names: `confidence`, `verification`, `adversarial`, `self_consistency`, `semantic_similarity`, `entailment`, `logprob`. Defaults to the original 3 if omitted.\n\n**4 new standalone MCP tools:**\n- `self_consistency_check` — sample N answers, measure agreement (with `num_samples` param)\n- `semantic_similarity_check` — sentence embedding comparison (requires `embeddings` extra)\n- `entailment_check` — NLI contradiction detection (requires `nli` extra)\n- `logprob_check` — token log-probability calibration (requires OpenAI)\n\nNo config changes needed on your side — the new tools will appear automatically when the MCP server runs.",
+          "timestamp": "2026-03-13T08:09:22.991Z"
+        },
+        {
+          "type": "user",
+          "text": "push changes",
+          "timestamp": "2026-03-13T08:09:25.917Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git diff --stat",
+            "description": "Show changed files"
+          },
+          "timestamp": "2026-03-13T08:09:29.512Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git add README.md src/agent_verdict/mcp_server.py && git commit -m \"$(cat <<'EOF'\nExpose all evaluation stages as MCP tools and add stages param to evaluate\n\n- Add standalone MCP tools: self_consistency_check, semantic_similarity_check, entailment_check, logprob_check\n- Add customizable 'stages' parameter to evaluate tool for flexible pipeline composition\n- Add STAGE_REGISTRY for name-to-class mapping\n- Update README MCP tools list\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n)\"",
+            "description": "Commit changes"
+          },
+          "timestamp": "2026-03-13T08:09:36.010Z"
+        }
+      ],
+      "total_additions": 143,
+      "total_deletions": 9,
+      "accepted_lines": 143,
+      "overriden_lines": 0
+    }
+  }
+}
