@@ -19,14 +19,38 @@ import os
 from mcp.server.fastmcp import FastMCP
 
 from .models import VerdictConfig
+from .stages import (
+    AdversarialStage,
+    ConfidenceStage,
+    EntailmentStage,
+    LogprobStage,
+    SelfConsistencyStage,
+    SemanticSimilarityStage,
+    Stage,
+    VerificationStage,
+)
+
+STAGE_REGISTRY: dict[str, type[Stage]] = {
+    "confidence": ConfidenceStage,
+    "verification": VerificationStage,
+    "adversarial": AdversarialStage,
+    "self_consistency": SelfConsistencyStage,
+    "semantic_similarity": SemanticSimilarityStage,
+    "entailment": EntailmentStage,
+    "logprob": LogprobStage,
+}
+
+DEFAULT_STAGES = ["confidence", "verification", "adversarial"]
 
 mcp = FastMCP(
     "agent-verdict",
     instructions=(
         "Tools for evaluating agent outputs with confidence scoring, "
-        "independent verification, and adversarial self-checking. "
-        "Use 'evaluate' to run the full pipeline on any result you want to verify. "
-        "Use 'check_confidence' for a quick confidence check without the full pipeline."
+        "independent verification, adversarial self-checking, self-consistency, "
+        "semantic similarity, NLI entailment, and logprob calibration. "
+        "Use 'evaluate' to run a customizable pipeline (pass 'stages' to pick which). "
+        "Use individual tools (check_confidence, adversarial_check, self_consistency_check, "
+        "semantic_similarity_check, entailment_check, logprob_check) to run a single stage."
     ),
 )
 
@@ -67,11 +91,28 @@ def _verdict_to_dict(verdict) -> dict:
     return verdict.model_dump()
 
 
+def _build_stages(stage_names: list[str]) -> list[Stage]:
+    """Build stage instances from a list of stage names."""
+    stages = []
+    for name in stage_names:
+        cls = STAGE_REGISTRY.get(name)
+        if cls is None:
+            raise ValueError(
+                f"Unknown stage '{name}'. "
+                f"Available: {', '.join(STAGE_REGISTRY)}"
+            )
+        stages.append(cls())
+    return stages
+
+
 @mcp.tool(
     name="evaluate",
     description=(
-        "Run the full verdict pipeline on an agent result: confidence scoring, "
-        "independent verification, and adversarial counter-argument/defense. "
+        "Run the verdict pipeline on an agent result. "
+        "By default runs: confidence → verification → adversarial. "
+        "Pass 'stages' to customize which stages run and in what order. "
+        "Available stages: confidence, verification, adversarial, "
+        "self_consistency, semantic_similarity, entailment, logprob. "
         "Returns a structured verdict with confidence, justification, "
         "counter-arguments, defense, and whether the result was dropped."
     ),
@@ -79,6 +120,7 @@ def _verdict_to_dict(verdict) -> dict:
 async def evaluate(
     result: str,
     task_context: str,
+    stages: list[str] | None = None,
     confidence_threshold: float = 0.5,
     relevance_threshold: float = 0.4,
     require_defense: bool = True,
@@ -90,7 +132,8 @@ async def evaluate(
         relevance_threshold=relevance_threshold,
         require_defense=require_defense,
     )
-    pipeline = VerdictPipeline(llm=_get_provider(), config=config)
+    stage_instances = _build_stages(stages or DEFAULT_STAGES)
+    pipeline = VerdictPipeline(llm=_get_provider(), config=config, stages=stage_instances)
     verdict = await pipeline.evaluate(result, task_context=task_context)
     return json.dumps(_verdict_to_dict(verdict), indent=2)
 
@@ -110,7 +153,6 @@ async def check_confidence(
     relevance_threshold: float = 0.4,
 ) -> str:
     from .pipeline import VerdictPipeline
-    from .stages import ConfidenceStage
 
     config = VerdictConfig(
         confidence_threshold=confidence_threshold,
@@ -140,12 +182,104 @@ async def adversarial_check(
     require_defense: bool = True,
 ) -> str:
     from .models import Verdict
-    from .stages import AdversarialStage
 
     config = VerdictConfig(require_defense=require_defense)
     llm = _get_provider()
     stage = AdversarialStage()
     verdict = Verdict(result=result, justification=justification)
+    verdict = await stage.run(verdict, llm, task_context, config)
+    return json.dumps(_verdict_to_dict(verdict), indent=2)
+
+
+@mcp.tool(
+    name="self_consistency_check",
+    description=(
+        "Self-Consistency check (Wang et al. 2022): sample N independent answers "
+        "to the same task and measure how many agree with the agent's result. "
+        "High agreement = high confidence. Catches unstable/unreliable answers."
+    ),
+)
+async def self_consistency_check(
+    result: str,
+    task_context: str,
+    num_samples: int = 3,
+    confidence_threshold: float = 0.5,
+) -> str:
+    from .models import Verdict
+
+    config = VerdictConfig(confidence_threshold=confidence_threshold)
+    llm = _get_provider()
+    stage = SelfConsistencyStage(num_samples=num_samples)
+    verdict = Verdict(result=result)
+    verdict = await stage.run(verdict, llm, task_context, config)
+    return json.dumps(_verdict_to_dict(verdict), indent=2)
+
+
+@mcp.tool(
+    name="semantic_similarity_check",
+    description=(
+        "Check semantic similarity between the agent's result and an independent "
+        "re-derivation using sentence embeddings (MiniLM). Catches off-topic answers. "
+        "Requires: pip install 'agent-verdict[embeddings]'"
+    ),
+)
+async def semantic_similarity_check(
+    result: str,
+    task_context: str,
+    confidence_threshold: float = 0.5,
+) -> str:
+    from .models import Verdict
+
+    config = VerdictConfig(confidence_threshold=confidence_threshold)
+    llm = _get_provider()
+    stage = SemanticSimilarityStage()
+    verdict = Verdict(result=result)
+    verdict = await stage.run(verdict, llm, task_context, config)
+    return json.dumps(_verdict_to_dict(verdict), indent=2)
+
+
+@mcp.tool(
+    name="entailment_check",
+    description=(
+        "NLI entailment check using DeBERTa-v3: verifies whether an independent "
+        "re-derivation entails the agent's answer. Catches hallucinated or "
+        "contradicting answers. Requires: pip install 'agent-verdict[nli]'"
+    ),
+)
+async def entailment_check(
+    result: str,
+    task_context: str,
+    confidence_threshold: float = 0.5,
+) -> str:
+    from .models import Verdict
+
+    config = VerdictConfig(confidence_threshold=confidence_threshold)
+    llm = _get_provider()
+    stage = EntailmentStage()
+    verdict = Verdict(result=result)
+    verdict = await stage.run(verdict, llm, task_context, config)
+    return json.dumps(_verdict_to_dict(verdict), indent=2)
+
+
+@mcp.tool(
+    name="logprob_check",
+    description=(
+        "Token log-probability calibration: measures the LLM's internal certainty "
+        "about the answer via exp(mean_logprob). Catches internally uncertain answers. "
+        "Requires OpenAI provider."
+    ),
+)
+async def logprob_check(
+    result: str,
+    task_context: str,
+    confidence_threshold: float = 0.5,
+) -> str:
+    from .models import Verdict
+
+    config = VerdictConfig(confidence_threshold=confidence_threshold)
+    llm = _get_provider()
+    stage = LogprobStage()
+    verdict = Verdict(result=result)
     verdict = await stage.run(verdict, llm, task_context, config)
     return json.dumps(_verdict_to_dict(verdict), indent=2)
 

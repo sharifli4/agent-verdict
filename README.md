@@ -86,7 +86,7 @@ curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/instal
 claude mcp add agent-verdict -- /path/to/.venv/bin/agent-verdict-mcp
 ```
 
-Tools: `evaluate`, `check_confidence`, `adversarial_check`.
+Tools: `evaluate` (customizable via `stages` param), `check_confidence`, `adversarial_check`, `self_consistency_check`, `semantic_similarity_check`, `entailment_check`, `logprob_check`.
 
 ## Verdict object
 
