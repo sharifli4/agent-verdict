@@ -31,6 +31,8 @@ Issues = "https://github.com/sharifli4/agent-verdict/issues"
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.40"]
 openai = ["openai>=1.0"]
+deepseek = ["openai>=1.0"]
+kimi = ["openai>=1.0"]
 mcp = ["mcp>=1.0"]
 embeddings = ["sentence-transformers>=3.0"]
 nli = ["transformers>=4.40", "torch>=2.0"]

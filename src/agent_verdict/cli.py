@@ -41,24 +41,52 @@ def _detect_provider() -> str:
         return "anthropic"
     if os.environ.get("OPENAI_API_KEY"):
         return "openai"
+    if os.environ.get("DEEPSEEK_API_KEY"):
+        return "deepseek"
+    if os.environ.get("MOONSHOT_API_KEY"):
+        return "kimi"
     print(
         "Error: No API key found. Set one of:\n\n"
         "  export ANTHROPIC_API_KEY=sk-ant-...\n"
-        "  export OPENAI_API_KEY=sk-...\n",
+        "  export OPENAI_API_KEY=sk-...\n"
+        "  export DEEPSEEK_API_KEY=sk-...\n"
+        "  export MOONSHOT_API_KEY=sk-...\n",
         file=sys.stderr,
     )
     sys.exit(1)
 
 
-def _get_provider(provider_name: str | None, model: str | None):
+def _get_provider(
+    provider_name: str | None,
+    model: str | None,
+    base_url: str | None = None,
+    api_key_env: str | None = None,
+):
     name = provider_name or _detect_provider()
     try:
-        if name == "openai":
-            from .llm.openai import OpenAIProvider
-            return OpenAIProvider(model=model) if model else OpenAIProvider()
-        else:
+        if name == "anthropic":
             from .llm.anthropic import AnthropicProvider
             return AnthropicProvider(model=model) if model else AnthropicProvider()
+        elif name == "deepseek":
+            from .llm.deepseek import DeepSeekProvider
+            return DeepSeekProvider(model=model) if model else DeepSeekProvider()
+        elif name == "kimi":
+            from .llm.kimi import KimiProvider
+            return KimiProvider(model=model) if model else KimiProvider()
+        else:
+            # "openai" or any custom OpenAI-compatible provider
+            from .llm.openai import OpenAIProvider
+            kwargs: dict = {}
+            if model:
+                kwargs["model"] = model
+            if base_url:
+                kwargs["base_url"] = base_url
+            if api_key_env:
+                kwargs["api_key_env"] = api_key_env
+            if base_url and not api_key_env:
+                # Custom base_url likely doesn't support strict structured output
+                kwargs["supports_structured_output"] = False
+            return OpenAIProvider(**kwargs)
     except (ImportError, RuntimeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -118,7 +146,7 @@ async def _run_evaluate(args) -> Verdict:
         relevance_threshold=args.relevance_threshold,
         require_defense=args.require_defense,
     )
-    llm = _get_provider(args.provider, args.model)
+    llm = _get_provider(args.provider, args.model, args.base_url, args.api_key_env)
     pipeline = VerdictPipeline(llm=llm, config=config)
     return await pipeline.evaluate(_read_result(args), task_context=args.context)
 
@@ -131,7 +159,7 @@ async def _run_check(args) -> Verdict:
         confidence_threshold=args.confidence_threshold,
         relevance_threshold=args.relevance_threshold,
     )
-    llm = _get_provider(args.provider, args.model)
+    llm = _get_provider(args.provider, args.model, args.base_url, args.api_key_env)
     pipeline = VerdictPipeline(llm=llm, config=config, stages=[ConfidenceStage()])
     return await pipeline.evaluate(_read_result(args), task_context=args.context)
 
@@ -141,7 +169,7 @@ async def _run_attack(args) -> Verdict:
     from .stages import AdversarialStage
 
     config = VerdictConfig(require_defense=args.require_defense)
-    llm = _get_provider(args.provider, args.model)
+    llm = _get_provider(args.provider, args.model, args.base_url, args.api_key_env)
     stage = AdversarialStage()
     result_text = _read_result(args)
     verdict = VerdictModel(result=result_text, justification=args.justification or "")
@@ -154,10 +182,19 @@ def main():
         description="Check if your agent's answer is actually good.",
     )
     parser.add_argument(
-        "-p", "--provider", default=None, choices=["anthropic", "openai"],
+        "-p", "--provider", default=None,
+        choices=["anthropic", "openai", "deepseek", "kimi"],
         help="LLM provider (auto-detected from API keys if not set)",
     )
     parser.add_argument("-m", "--model", default=None, help="model name")
+    parser.add_argument(
+        "--base-url", default=None,
+        help="custom OpenAI-compatible API base URL (use with -p openai)",
+    )
+    parser.add_argument(
+        "--api-key-env", default=None,
+        help="env var name holding the API key (default: per-provider)",
+    )
     parser.add_argument("--json", action="store_true", help="output raw JSON")
     parser.add_argument("-v", "--verbose", action="store_true", help="show extra details")
 

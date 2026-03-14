@@ -64,26 +64,49 @@ def _detect_provider() -> str:
         return "anthropic"
     if os.environ.get("OPENAI_API_KEY"):
         return "openai"
+    if os.environ.get("DEEPSEEK_API_KEY"):
+        return "deepseek"
+    if os.environ.get("MOONSHOT_API_KEY"):
+        return "kimi"
     return "anthropic"
 
 
 def _get_provider():
     provider_name = _detect_provider()
     model = os.environ.get("VERDICT_MODEL")
+    base_url = os.environ.get("VERDICT_BASE_URL")
+    api_key_env = os.environ.get("VERDICT_API_KEY_ENV")
 
     try:
-        if provider_name == "openai":
-            from .llm.openai import OpenAIProvider
-
-            return OpenAIProvider(model=model) if model else OpenAIProvider()
-        else:
+        if provider_name == "anthropic":
             from .llm.anthropic import AnthropicProvider
 
             return AnthropicProvider(model=model) if model else AnthropicProvider()
+        elif provider_name == "deepseek":
+            from .llm.deepseek import DeepSeekProvider
+
+            return DeepSeekProvider(model=model) if model else DeepSeekProvider()
+        elif provider_name == "kimi":
+            from .llm.kimi import KimiProvider
+
+            return KimiProvider(model=model) if model else KimiProvider()
+        else:
+            from .llm.openai import OpenAIProvider
+
+            kwargs: dict = {}
+            if model:
+                kwargs["model"] = model
+            if base_url:
+                kwargs["base_url"] = base_url
+            if api_key_env:
+                kwargs["api_key_env"] = api_key_env
+            if base_url and not api_key_env:
+                kwargs["supports_structured_output"] = False
+            return OpenAIProvider(**kwargs)
     except ImportError as e:
         raise RuntimeError(
             f"Provider '{provider_name}' not installed. "
-            f"Run: pip install 'agent-verdict[{provider_name},mcp]'"
+            f"Run: pip install 'agent-verdict[openai,mcp]'"
         ) from e
 
 

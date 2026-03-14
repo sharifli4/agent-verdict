@@ -18,23 +18,52 @@ If it fails at any step, the rest don't run. No wasted LLM calls.
 curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh
 ```
 
+Options: `sh -s anthropic`, `sh -s openai`, `sh -s deepseek`, `sh -s kimi`, `sh -s all`, `sh -s mcp`.
+
+## Providers
+
+Works with any LLM. Built-in support for:
+
+| Provider | API key env var | Default model | Install extra |
+|----------|----------------|---------------|---------------|
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` | `agent-verdict[anthropic]` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-4o` | `agent-verdict[openai]` |
+| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` | `agent-verdict[deepseek]` |
+| Kimi (Moonshot) | `MOONSHOT_API_KEY` | `kimi-k2.5` | `agent-verdict[kimi]` |
+
 Set your API key:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 # or
 export OPENAI_API_KEY=sk-...
+# or
+export DEEPSEEK_API_KEY=sk-...
+# or
+export MOONSHOT_API_KEY=sk-...
 ```
 
-Options: `sh -s anthropic`, `sh -s openai`, `sh -s all`, `sh -s mcp` (for Claude Code/Cursor).
+**Any OpenAI-compatible API** works too — just pass `--base-url` and `--api-key-env`:
+
+```bash
+# use any OpenAI-compatible provider
+agent-verdict -p openai --base-url https://api.example.com/v1 --api-key-env MY_API_KEY \
+    eval "result" -c "task"
+```
 
 ## Usage
 
 ### CLI
 
 ```bash
-# full pipeline
+# full pipeline (auto-detects provider from API key)
 agent-verdict evaluate "SQL injection on line 14" -c "Find security bugs"
+
+# pick a specific provider
+agent-verdict -p deepseek eval "SQL injection on line 14" -c "Find security bugs"
+
+# pick a specific model
+agent-verdict -p openai -m gpt-4o-mini eval "result" -c "task"
 
 # pipe from another tool
 my-agent analyze code.py | agent-verdict eval -c "Find security bugs"
@@ -69,13 +98,30 @@ result.defended          # True
 result.dropped           # False
 ```
 
+Use any provider:
+
+```python
+from agent_verdict.llm.openai import OpenAIProvider
+from agent_verdict.llm.deepseek import DeepSeekProvider
+from agent_verdict.llm.kimi import KimiProvider
+
+llm = DeepSeekProvider()                     # uses DEEPSEEK_API_KEY
+llm = KimiProvider(model="kimi-k2.5")       # uses MOONSHOT_API_KEY
+
+# any OpenAI-compatible API
+llm = OpenAIProvider(
+    model="my-model",
+    base_url="https://api.example.com/v1",
+    api_key_env="MY_API_KEY",
+)
+```
+
 Or use the pipeline directly:
 
 ```python
 from agent_verdict import VerdictPipeline, VerdictConfig
-from agent_verdict.llm.openai import OpenAIProvider
 
-pipeline = VerdictPipeline(llm=OpenAIProvider(), config=VerdictConfig(confidence_threshold=0.7))
+pipeline = VerdictPipeline(llm=llm, config=VerdictConfig(confidence_threshold=0.7))
 result = await pipeline.evaluate("race condition in pool", task_context="Find concurrency bugs")
 ```
 
@@ -85,6 +131,8 @@ result = await pipeline.evaluate("race condition in pool", task_context="Find co
 curl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s mcp
 claude mcp add agent-verdict -- /path/to/.venv/bin/agent-verdict-mcp
 ```
+
+Configure via env vars: `VERDICT_PROVIDER`, `VERDICT_MODEL`, `VERDICT_BASE_URL`, `VERDICT_API_KEY_ENV`.
 
 Tools: `evaluate` (customizable via `stages` param), `check_confidence`, `adversarial_check`, `self_consistency_check`, `semantic_similarity_check`, `entailment_check`, `logprob_check`.
 
@@ -154,10 +202,19 @@ CLI: `--confidence-threshold`, `--relevance-threshold`, `--no-require-defense`.
 ## Extend
 
 ```python
-# Custom LLM provider
+# Custom LLM provider — implement one method
 class MyProvider(LLMProvider):
     async def complete(self, messages):
         return LLMResponse(content=await my_llm(messages[0].content))
+
+# Or subclass OpenAIProvider for any OpenAI-compatible API
+class MyProvider(OpenAIProvider):
+    def __init__(self):
+        super().__init__(
+            model="my-model",
+            base_url="https://api.example.com/v1",
+            api_key_env="MY_API_KEY",
+        )
 
 # Custom stage
 class MyStage(Stage):

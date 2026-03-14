@@ -21,6 +21,8 @@ for arg in "$@"; do
     case "$arg" in
         anthropic|claude) PROVIDER="anthropic" ;;
         openai|gpt)       PROVIDER="openai" ;;
+        deepseek)          PROVIDER="deepseek" ;;
+        kimi|moonshot)     PROVIDER="kimi" ;;
         all)               PROVIDER="anthropic,openai"; MCP=true ;;
         mcp)               MCP=true ;;
     esac
@@ -33,6 +35,10 @@ if [ -z "$PROVIDER" ]; then
         PROVIDER="anthropic"
     elif [ -n "${OPENAI_API_KEY:-}" ]; then
         PROVIDER="openai"
+    elif [ -n "${DEEPSEEK_API_KEY:-}" ]; then
+        PROVIDER="deepseek"
+    elif [ -n "${MOONSHOT_API_KEY:-}" ]; then
+        PROVIDER="kimi"
     else
         PROVIDER="anthropic"
     fi
@@ -90,6 +96,16 @@ if echo "$PROVIDER" | grep -q "openai"; then
         NEED_KEY="${NEED_KEY:+$NEED_KEY and }openai"
     fi
 fi
+if echo "$PROVIDER" | grep -q "deepseek"; then
+    if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+        NEED_KEY="${NEED_KEY:+$NEED_KEY and }deepseek"
+    fi
+fi
+if echo "$PROVIDER" | grep -q "kimi"; then
+    if [ -z "${MOONSHOT_API_KEY:-}" ]; then
+        NEED_KEY="${NEED_KEY:+$NEED_KEY and }kimi (moonshot)"
+    fi
+fi
 
 if [ -n "$NEED_KEY" ]; then
     warn "Set your API key to get started:"
@@ -99,6 +115,12 @@ if [ -n "$NEED_KEY" ]; then
     fi
     if echo "$NEED_KEY" | grep -q "openai"; then
         printf "    export OPENAI_API_KEY=sk-...\n"
+    fi
+    if echo "$NEED_KEY" | grep -q "deepseek"; then
+        printf "    export DEEPSEEK_API_KEY=sk-...\n"
+    fi
+    if echo "$NEED_KEY" | grep -q "kimi"; then
+        printf "    export MOONSHOT_API_KEY=sk-...\n"
     fi
     echo ""
 fi

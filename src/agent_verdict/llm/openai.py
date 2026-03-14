@@ -11,7 +11,15 @@ from .base import LLMProvider
 
 
 class OpenAIProvider(LLMProvider):
-    def __init__(self, model: str = "gpt-4o", max_tokens: int = 1024):
+    def __init__(
+        self,
+        model: str = "gpt-4o",
+        max_tokens: int = 1024,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        api_key_env: str = "OPENAI_API_KEY",
+        supports_structured_output: bool = True,
+    ):
         try:
             import openai
         except ImportError:
@@ -22,15 +30,17 @@ class OpenAIProvider(LLMProvider):
 
         import os
 
-        if not os.environ.get("OPENAI_API_KEY"):
+        resolved_key = api_key or os.environ.get(api_key_env)
+        if not resolved_key:
             raise RuntimeError(
-                "OPENAI_API_KEY not set. Export it first:\n\n"
-                "  export OPENAI_API_KEY=sk-...\n"
+                f"{api_key_env} not set. Export it first:\n\n"
+                f"  export {api_key_env}=...\n"
             )
 
-        self.client = openai.AsyncOpenAI()
+        self.client = openai.AsyncOpenAI(api_key=resolved_key, base_url=base_url)
         self.model = model
         self.max_tokens = max_tokens
+        self._supports_structured_output = supports_structured_output
 
     async def complete(self, messages: list[LLMMessage]) -> LLMResponse:
         response = await self.client.chat.completions.create(
@@ -45,7 +55,14 @@ class OpenAIProvider(LLMProvider):
         messages: list[LLMMessage],
         schema: Type[BaseModel],
     ) -> dict[str, Any]:
-        """Use OpenAI's response_format with json_schema for structured output."""
+        """Use OpenAI's response_format with json_schema for structured output.
+
+        Falls back to base class JSON parsing for providers that don't support
+        structured output (e.g. DeepSeek, Kimi).
+        """
+        if not self._supports_structured_output:
+            return await super().complete_structured(messages, schema)
+
         json_schema = schema.model_json_schema()
         json_schema.pop("title", None)
 
