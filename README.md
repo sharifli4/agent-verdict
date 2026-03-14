@@ -134,7 +134,7 @@ claude mcp add agent-verdict -- /path/to/.venv/bin/agent-verdict-mcp
 
 Configure via env vars: `VERDICT_PROVIDER`, `VERDICT_MODEL`, `VERDICT_BASE_URL`, `VERDICT_API_KEY_ENV`.
 
-Tools: `evaluate` (customizable via `stages` param), `check_confidence`, `adversarial_check`, `self_consistency_check`, `semantic_similarity_check`, `entailment_check`, `logprob_check`.
+Tools: `evaluate` (customizable via `stages` param), `check_confidence`, `adversarial_check`, `self_consistency_check`, `semantic_similarity_check`, `entailment_check`, `logprob_check`, `cross_verification`.
 
 ## Verdict object
 
@@ -147,6 +147,7 @@ result.defense             # response to that attack
 result.defended            # did the defense hold?
 result.dropped             # was the answer rejected?
 result.drop_reason         # why it was rejected
+result.deliberation        # list[JurorPosition] — cross-verification jury
 ```
 
 ## Evaluation algorithms
@@ -160,6 +161,7 @@ result.drop_reason         # why it was rejected
 | **Cosine Similarity** | Sentence embeddings ([MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)) | Off-topic answers |
 | **NLI Entailment** | [DeBERTa-v3](https://huggingface.co/cross-encoder/nli-deberta-v3-small) classification | Hallucinated/contradicting answers |
 | **Logprob Calibration** | Token log-probabilities via `exp(mean_logprob)` | Internally uncertain answers |
+| **Cross-Verification** | Multi-model jury deliberation with position, counter, and rebuttal | Answers that fool one model but not others |
 
 Default pipeline uses the first 3 (4 LLM calls). Stages 5-7 use different models, breaking the "same brain grading itself" problem.
 
@@ -174,6 +176,7 @@ Default pipeline uses the first 3 (4 LLM calls). Stages 5-7 use different models
 | `SemanticSimilarityStage` | 0 | `pip install agent-verdict[embeddings]` |
 | `EntailmentStage` | 0 | `pip install agent-verdict[nli]` |
 | `LogprobStage` | 1 | OpenAI only |
+| `CrossVerificationStage` | 2 per juror | needs 2+ providers |
 
 Custom pipeline:
 
@@ -186,6 +189,44 @@ pipeline = VerdictPipeline(llm=llm, stages=[
     AdversarialStage(),
 ])
 ```
+
+## Cross-verification (multi-model jury)
+
+Different LLMs deliberate on your agent's answer like a jury. Each juror:
+
+1. **States position** — support or challenge, with argument
+2. **Steel-mans the other side** — strongest counter to their own position
+3. **Deliberates** — sees all positions, writes rebuttal, casts final vote
+
+All jurors run in parallel. Wall-clock time ≈ one slow LLM call per phase.
+
+```python
+from agent_verdict import VerdictPipeline, CrossVerificationStage
+from agent_verdict.llm.anthropic import AnthropicProvider
+from agent_verdict.llm.openai import OpenAIProvider
+from agent_verdict.llm.deepseek import DeepSeekProvider
+
+pipeline = VerdictPipeline(
+    llm=AnthropicProvider(),
+    stages=[
+        CrossVerificationStage(challengers=[
+            OpenAIProvider(),
+            DeepSeekProvider(),
+        ]),
+    ],
+)
+
+result = await pipeline.evaluate("the agent's answer", task_context="what it should do")
+
+# inspect the jury deliberation
+for juror in result.deliberation:
+    print(f"{juror.juror}: {juror.vote} → {juror.final_vote} ({juror.confidence:.2f})")
+    print(f"  argument: {juror.argument}")
+    print(f"  steel-man: {juror.counter_to_self}")
+    print(f"  rebuttal: {juror.rebuttal}")
+```
+
+Majority vote decides. If more jurors challenge than support, the result is dropped.
 
 ## Configuration
 

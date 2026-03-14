@@ -22,6 +22,7 @@ from .models import VerdictConfig
 from .stages import (
     AdversarialStage,
     ConfidenceStage,
+    CrossVerificationStage,
     EntailmentStage,
     LogprobStage,
     SelfConsistencyStage,
@@ -38,6 +39,7 @@ STAGE_REGISTRY: dict[str, type[Stage]] = {
     "semantic_similarity": SemanticSimilarityStage,
     "entailment": EntailmentStage,
     "logprob": LogprobStage,
+    "cross_verification": CrossVerificationStage,
 }
 
 DEFAULT_STAGES = ["confidence", "verification", "adversarial"]
@@ -305,6 +307,58 @@ async def logprob_check(
     verdict = Verdict(result=result)
     verdict = await stage.run(verdict, llm, task_context, config)
     return json.dumps(_verdict_to_dict(verdict), indent=2)
+
+
+@mcp.tool(
+    name="cross_verification",
+    description=(
+        "Multi-model jury deliberation: multiple LLMs independently evaluate the "
+        "agent's result, then see each other's positions and cast a final vote. "
+        "Each juror argues for/against, steel-mans the opposing view, and rebuts "
+        "after deliberation. Majority vote decides. Set VERDICT_CHALLENGER_PROVIDERS "
+        "env var (comma-separated, e.g. 'openai,deepseek') to pick the jury."
+    ),
+)
+async def cross_verification(
+    result: str,
+    task_context: str,
+    confidence_threshold: float = 0.5,
+) -> str:
+    from .models import Verdict
+
+    config = VerdictConfig(confidence_threshold=confidence_threshold)
+    primary = _get_provider()
+    challengers = _get_challengers()
+    stage = CrossVerificationStage(challengers=challengers)
+    verdict = Verdict(result=result, confidence=1.0)
+    verdict = await stage.run(verdict, primary, task_context, config)
+    return json.dumps(_verdict_to_dict(verdict), indent=2)
+
+
+def _get_challengers():
+    """Build challenger providers from VERDICT_CHALLENGER_PROVIDERS env var."""
+    raw = os.environ.get("VERDICT_CHALLENGER_PROVIDERS", "")
+    if not raw:
+        return []
+    challengers = []
+    for name in raw.split(","):
+        name = name.strip().lower()
+        try:
+            if name == "anthropic":
+                from .llm.anthropic import AnthropicProvider
+                challengers.append(AnthropicProvider())
+            elif name == "openai":
+                from .llm.openai import OpenAIProvider
+                challengers.append(OpenAIProvider())
+            elif name == "deepseek":
+                from .llm.deepseek import DeepSeekProvider
+                challengers.append(DeepSeekProvider())
+            elif name == "kimi":
+                from .llm.kimi import KimiProvider
+                challengers.append(KimiProvider())
+        except (ImportError, RuntimeError):
+            pass  # skip unavailable providers
+    return challengers
 
 
 def main():

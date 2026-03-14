@@ -6,6 +6,7 @@ from .pipeline import VerdictPipeline
 from .stages import (
     AdversarialStage,
     ConfidenceStage,
+    CrossVerificationStage,
     EntailmentStage,
     LogprobStage,
     SelfConsistencyStage,
@@ -17,6 +18,7 @@ from .stages import (
 __all__ = [
     "AdversarialStage",
     "ConfidenceStage",
+    "CrossVerificationStage",
     "DroppedResultError",
     "EntailmentStage",
     "LLMMessage",

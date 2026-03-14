@@ -20,6 +20,17 @@ class VerdictConfig(BaseModel):
     require_defense: bool = True
 
 
+class JurorPosition(BaseModel):
+    """A single juror's position in cross-verification deliberation."""
+    juror: str = ""
+    vote: str = ""  # "support" or "challenge"
+    argument: str = ""
+    counter_to_self: str = ""  # steel-man against own position
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    final_vote: str = ""  # after seeing all positions
+    rebuttal: str = ""  # response to other jurors
+
+
 class Verdict(BaseModel):
     result: Any = None
     justification: str = ""
@@ -31,6 +42,7 @@ class Verdict(BaseModel):
     defended: bool = False
     dropped: bool = False
     drop_reason: str = ""
+    deliberation: list[JurorPosition] = Field(default_factory=list)
 
 
 # --- Structured output schemas for each stage ---
@@ -56,3 +68,16 @@ class CounterArgumentOutput(BaseModel):
 class DefenseOutput(BaseModel):
     defense: str
     defended: bool
+
+
+class JurorPositionOutput(BaseModel):
+    vote: str  # "support" or "challenge"
+    argument: str
+    counter_to_self: str
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class JurorDeliberationOutput(BaseModel):
+    final_vote: str  # "support" or "challenge"
+    rebuttal: str
+    confidence: float = Field(ge=0.0, le=1.0)

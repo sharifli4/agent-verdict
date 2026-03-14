@@ -6,6 +6,7 @@ from .self_consistency import SelfConsistencyStage
 from .semantic_similarity import SemanticSimilarityStage
 from .entailment import EntailmentStage
 from .logprob import LogprobStage
+from .cross_verification import CrossVerificationStage
 
 __all__ = [
     "Stage",
@@ -16,4 +17,5 @@ __all__ = [
     "SemanticSimilarityStage",
     "EntailmentStage",
     "LogprobStage",
+    "CrossVerificationStage",
 ]
