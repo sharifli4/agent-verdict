@@ -12,6 +12,8 @@ class LLMMessage(BaseModel):
 
 class LLMResponse(BaseModel):
     content: str
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class VerdictConfig(BaseModel):
@@ -31,6 +33,16 @@ class JurorPosition(BaseModel):
     rebuttal: str = ""  # response to other jurors
 
 
+class StageUsage(BaseModel):
+    """Token usage and cost for a single pipeline stage."""
+    stage: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    llm_calls: int = 0
+    cost: float = 0.0  # USD
+
+
 class Verdict(BaseModel):
     result: Any = None
     justification: str = ""
@@ -43,6 +55,15 @@ class Verdict(BaseModel):
     dropped: bool = False
     drop_reason: str = ""
     deliberation: list[JurorPosition] = Field(default_factory=list)
+    usage: list[StageUsage] = Field(default_factory=list)
+
+    @property
+    def total_tokens(self) -> int:
+        return sum(u.total_tokens for u in self.usage)
+
+    @property
+    def total_cost(self) -> float:
+        return sum(u.cost for u in self.usage)
 
 
 # --- Structured output schemas for each stage ---

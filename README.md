@@ -148,6 +148,9 @@ result.defended            # did the defense hold?
 result.dropped             # was the answer rejected?
 result.drop_reason         # why it was rejected
 result.deliberation        # list[JurorPosition] — cross-verification jury
+result.usage               # list[StageUsage] — per-stage token/cost breakdown
+result.total_tokens        # sum of all tokens across stages
+result.total_cost          # sum of all costs in USD
 ```
 
 ## Evaluation algorithms
@@ -227,6 +230,37 @@ for juror in result.deliberation:
 ```
 
 Majority vote decides. If more jurors challenge than support, the result is dropped.
+
+## Cost tracking
+
+Every evaluation tracks token usage and estimated cost per stage — no surprises.
+
+```python
+result = await pipeline.evaluate("answer", task_context="task")
+
+for stage in result.usage:
+    print(f"{stage.stage}: {stage.llm_calls} calls, {stage.total_tokens:,} tokens, ${stage.cost:.4f}")
+
+print(f"Total: {result.total_tokens:,} tokens, ${result.total_cost:.4f}")
+```
+
+CLI output includes cost breakdown automatically:
+
+```
+  PASSED
+
+  confidence:   0.87
+  relevance:    0.82
+  cost:
+    ConfidenceStage              1 calls       423 tokens  $0.0016
+    VerificationStage            1 calls       512 tokens  $0.0021
+    AdversarialStage             2 calls       891 tokens  $0.0045
+                                 total: $0.0082  (1,826 tokens)
+```
+
+JSON output (`--json`) includes `usage` array with per-stage breakdown.
+
+Built-in pricing for GPT-4o, Claude Sonnet/Opus/Haiku, DeepSeek, Kimi K2.5, and more. Custom models show token counts (cost = $0 if model not in pricing table).
 
 ## Configuration
 

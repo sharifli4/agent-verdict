@@ -125,6 +125,18 @@ def _print_verdict(v: Verdict, verbose: bool = False) -> None:
         print()
         print(f"  {_color('confidence reason:', DIM)} {v.confidence_reason}")
 
+    # cost breakdown
+    if v.usage:
+        print(f"  {_color('cost:', DIM)}")
+        for u in v.usage:
+            cost_str = f"${u.cost:.4f}" if u.cost > 0 else "n/a"
+            tokens_str = f"{u.total_tokens:,} tokens" if u.total_tokens > 0 else "no data"
+            print(f"    {_color(u.stage, CYAN):32s} {u.llm_calls} calls  {tokens_str:>16s}  {_color(cost_str, YELLOW)}")
+        total = v.total_cost
+        total_tokens = v.total_tokens
+        if total > 0:
+            print(f"    {'':32s} {_color(f'total: ${total:.4f}', BOLD)}  ({total_tokens:,} tokens)")
+
     print()
 
 

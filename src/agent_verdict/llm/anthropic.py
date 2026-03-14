@@ -38,7 +38,14 @@ class AnthropicProvider(LLMProvider):
             max_tokens=self.max_tokens,
             messages=[{"role": m.role, "content": m.content} for m in messages],
         )
-        return LLMResponse(content=response.content[0].text)
+        input_tokens = getattr(response.usage, "input_tokens", 0) or 0
+        output_tokens = getattr(response.usage, "output_tokens", 0) or 0
+        self._track_usage(input_tokens, output_tokens)
+        return LLMResponse(
+            content=response.content[0].text,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
 
     async def complete_structured(
         self,
@@ -66,6 +73,10 @@ class AnthropicProvider(LLMProvider):
             ],
             tool_choice={"type": "tool", "name": tool_name},
         )
+
+        input_tokens = getattr(response.usage, "input_tokens", 0) or 0
+        output_tokens = getattr(response.usage, "output_tokens", 0) or 0
+        self._track_usage(input_tokens, output_tokens)
 
         for block in response.content:
             if block.type == "tool_use":
