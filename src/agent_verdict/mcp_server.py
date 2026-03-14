@@ -126,7 +126,10 @@ def _build_stages(stage_names: list[str]) -> list[Stage]:
                 f"Unknown stage '{name}'. "
                 f"Available: {', '.join(STAGE_REGISTRY)}"
             )
-        stages.append(cls())
+        if cls is CrossVerificationStage:
+            stages.append(cls(challengers=_get_challengers()))
+        else:
+            stages.append(cls())
     return stages
 
 
@@ -137,7 +140,7 @@ def _build_stages(stage_names: list[str]) -> list[Stage]:
         "By default runs: confidence → verification → adversarial. "
         "Pass 'stages' to customize which stages run and in what order. "
         "Available stages: confidence, verification, adversarial, "
-        "self_consistency, semantic_similarity, entailment, logprob. "
+        "self_consistency, semantic_similarity, entailment, logprob, cross_verification. "
         "Returns a structured verdict with confidence, justification, "
         "counter-arguments, defense, and whether the result was dropped."
     ),
@@ -315,33 +318,37 @@ async def logprob_check(
         "Multi-model jury deliberation: multiple LLMs independently evaluate the "
         "agent's result, then see each other's positions and cast a final vote. "
         "Each juror argues for/against, steel-mans the opposing view, and rebuts "
-        "after deliberation. Majority vote decides. Set VERDICT_CHALLENGER_PROVIDERS "
-        "env var (comma-separated, e.g. 'openai,deepseek') to pick the jury."
+        "after deliberation. Majority vote decides. "
+        "Pass 'challengers' (e.g. ['openai', 'deepseek']) to pick the jury, "
+        "or set VERDICT_CHALLENGER_PROVIDERS env var."
     ),
 )
 async def cross_verification(
     result: str,
     task_context: str,
+    challengers: list[str] | None = None,
     confidence_threshold: float = 0.5,
 ) -> str:
     from .models import Verdict
 
     config = VerdictConfig(confidence_threshold=confidence_threshold)
     primary = _get_provider()
-    challengers = _get_challengers()
-    stage = CrossVerificationStage(challengers=challengers)
+    challenger_providers = _get_challengers(challengers)
+    stage = CrossVerificationStage(challengers=challenger_providers)
     verdict = Verdict(result=result, confidence=1.0)
     verdict = await stage.run(verdict, primary, task_context, config)
     return json.dumps(_verdict_to_dict(verdict), indent=2)
 
 
-def _get_challengers():
-    """Build challenger providers from VERDICT_CHALLENGER_PROVIDERS env var."""
-    raw = os.environ.get("VERDICT_CHALLENGER_PROVIDERS", "")
-    if not raw:
+def _get_challengers(names: list[str] | None = None):
+    """Build challenger providers from names list or VERDICT_CHALLENGER_PROVIDERS env var."""
+    if names is None:
+        raw = os.environ.get("VERDICT_CHALLENGER_PROVIDERS", "")
+        names = [n.strip() for n in raw.split(",") if n.strip()] if raw else []
+    if not names:
         return []
     challengers = []
-    for name in raw.split(","):
+    for name in names:
         name = name.strip().lower()
         try:
             if name == "anthropic":
