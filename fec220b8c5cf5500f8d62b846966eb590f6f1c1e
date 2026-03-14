@@ -1,0 +1,1563 @@
+src/agent_verdict/llm/base.py
+  698e5b60d4fe50b8 12-45,67-87
+src/agent_verdict/pipeline.py
+  698e5b60d4fe50b8 5-6,31-32,36,38-81
+src/agent_verdict/models.py
+  698e5b60d4fe50b8 15-16,36-45,58-66
+src/agent_verdict/llm/openai.py
+  698e5b60d4fe50b8 51-53,55-57,95-97
+README.md
+  698e5b60d4fe50b8 151-153,234-264
+src/agent_verdict/cli.py
+  698e5b60d4fe50b8 128-139
+src/agent_verdict/__init__.py
+  698e5b60d4fe50b8 4,29
+src/agent_verdict/llm/anthropic.py
+  698e5b60d4fe50b8 41-43,45-47,77-80
+tests/test_cost_tracking.py
+  698e5b60d4fe50b8 1-190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "fec220b8c5cf5500f8d62b846966eb590f6f1c1e",
+  "prompts": {
+    "698e5b60d4fe50b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "982cbc50-6c58-403d-8459-b9089acf8164",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "kenan <kenansharifov400@gmail.com>",
+      "messages": [
+        {
+          "type": "user",
+          "text": "review project, gain knowledge about it",
+          "timestamp": "2026-03-14T21:02:40.612Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict"
+          },
+          "timestamp": "2026-03-14T21:02:44.202Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "ls -la /home/kenan/repositories/agent-verdict/",
+            "description": "List project root"
+          },
+          "timestamp": "2026-03-14T21:02:46.770Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Glob",
+          "input": {
+            "path": "/home/kenan/repositories/agent-verdict",
+            "pattern": "**/*.py"
+          },
+          "timestamp": "2026-03-14T21:02:47.219Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md"
+          },
+          "timestamp": "2026-03-14T21:02:47.450Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Agent",
+          "input": {
+            "description": "Deep dive into core source",
+            "prompt": "Explore the agent-verdict project at /home/kenan/repositories/agent-verdict. Read these key files and provide a thorough summary of each:\n\n1. src/agent_verdict/__init__.py - public API\n2. src/agent_verdict/models.py - data models\n3. src/agent_verdict/pipeline.py - core pipeline logic\n4. src/agent_verdict/decorator.py - the @verdict decorator\n5. src/agent_verdict/cli.py - CLI interface\n6. src/agent_verdict/mcp_server.py - MCP server\n7. src/agent_verdict/llm/base.py - LLM provider interface\n8. src/agent_verdict/llm/openai.py - OpenAI provider\n9. src/agent_verdict/llm/anthropic.py - Anthropic provider\n10. src/agent_verdict/stages/base.py - stage interface\n11. src/agent_verdict/stages/confidence.py\n12. src/agent_verdict/stages/verification.py\n13. src/agent_verdict/stages/adversarial.py\n14. src/agent_verdict/stages/self_consistency.py\n15. src/agent_verdict/stages/semantic_similarity.py\n16. src/agent_verdict/stages/entailment.py\n17. src/agent_verdict/stages/logprob.py\n18. pyproject.toml - project config\n\nFor each file, summarize: purpose, key classes/functions, important logic, and how it connects to the rest of the system. Be thorough.",
+            "subagent_type": "Explore"
+          },
+          "timestamp": "2026-03-14T21:02:55.005Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Here's a complete overview of **agent-verdict**:\n\n## What It Is\n\nAn AI agent answer verification library. It takes an agent's output and runs it through a pipeline of evaluation stages to determine if the answer should be trusted or rejected.\n\n## Architecture\n\n```\nUser Interfaces (decorator, CLI, MCP server)\n        ↓\n   VerdictPipeline  →  Stage 1 → Stage 2 → Stage 3 → ... → Final Verdict\n        ↓\n   LLM Providers (Anthropic / OpenAI)\n   + optional offline models (MiniLM, DeBERTa)\n```\n\n**Core flow**: Agent result → `Verdict` object flows through stages sequentially. Any stage can \"drop\" the result (reject it), stopping the pipeline early.\n\n## Key Components\n\n| Component | File | Role |\n|-----------|------|------|\n| **Models** | `models.py` | Pydantic schemas: `Verdict`, `VerdictConfig`, structured outputs |\n| **Pipeline** | `pipeline.py` | Chains stages, handles early termination on drop |\n| **Decorator** | `decorator.py` | `@verdict()` wraps agent functions, auto-evaluates returns |\n| **CLI** | `cli.py` | `evaluate`, `check`, `attack` subcommands; auto-detects provider |\n| **MCP Server** | `mcp_server.py` | 7 tools for Claude Code / Cursor integration |\n| **LLM Base** | `llm/base.py` | ABC with `complete()` + `complete_structured()` (JSON schema) |\n| **Anthropic** | `llm/anthropic.py` | Uses tool_use for structured output (default: claude-sonnet-4-6) |\n| **OpenAI** | `llm/openai.py` | Uses json_schema response format (default: gpt-4o) |\n\n## 7 Evaluation Stages\n\n| # | Stage | LLM Calls | What It Catches |\n|---|-------|-----------|-----------------|\n| 1 | **Confidence** | 1 | Vague/low-quality answers (rates confidence + relevance 0-1) |\n| 2 | **Verification** | 1 | Answers that don't hold up to independent re-derivation |\n| 3 | **Adversarial** | 2 | Plausible but flawed answers (counter-argument → defense) |\n| 4 | **Self-Consistency** | 2N | Unstable answers (re-derives N times, votes on agreement) |\n| 5 | **Semantic Similarity** | 0 | Off-topic answers (MiniLM embeddings, cosine similarity) |\n| 6 | **Entailment** | 0 | Hallucinations/contradictions (DeBERTa NLI classification) |\n| 7 | **Logprob** | 1 | Internally uncertain answers (token log-probabilities, OpenAI only) |\n\nDefault pipeline: stages 1-3 (4 LLM calls). Stages 5-6 use different models, breaking the \"same brain grading itself\" problem.\n\n## Design Highlights\n\n- **Minimal core dependency**: only `pydantic>=2.0`; LLM SDKs and ML models are optional extras\n- **Prompt injection safety**: `sanitize_for_prompt()` escapes XML tags in user data + adds boundary instructions\n- **Structured output**: uses native provider mechanisms (Anthropic tool_use, OpenAI json_schema) rather than parsing free text\n- **Graceful degradation**: embedding/NLI stages fall back to LLM-based evaluation if offline models aren't installed\n- **Three interfaces**: Python decorator, CLI (with stdin pipe support), MCP tools",
+          "timestamp": "2026-03-14T21:04:49.946Z"
+        },
+        {
+          "type": "user",
+          "text": "great, we have to give ability to use other llm models as well beside of openai, claude. like kimi k2, deepseek",
+          "timestamp": "2026-03-14T21:07:04.579Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/openai.py"
+          },
+          "timestamp": "2026-03-14T21:07:12.134Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/base.py"
+          },
+          "timestamp": "2026-03-14T21:07:12.529Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/__init__.py"
+          },
+          "timestamp": "2026-03-14T21:07:12.976Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/cli.py"
+          },
+          "timestamp": "2026-03-14T21:07:13.321Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py"
+          },
+          "timestamp": "2026-03-14T21:07:13.767Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/__init__.py"
+          },
+          "timestamp": "2026-03-14T21:07:14.209Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/pyproject.toml"
+          },
+          "timestamp": "2026-03-14T21:07:14.657Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/install.sh"
+          },
+          "timestamp": "2026-03-14T21:07:14.925Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Good plan. Both DeepSeek and Kimi K2 offer OpenAI-compatible APIs, so we can reuse the `openai` SDK with a custom `base_url`. Here's my approach:\n\n1. Refactor `OpenAIProvider` to accept `base_url`/`api_key` params\n2. Create thin `DeepSeekProvider` and `KimiProvider` subclasses\n3. Update CLI, MCP server, install script, pyproject.toml, and README\n\nLet me implement this.",
+          "timestamp": "2026-03-14T21:07:31.845Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/anthropic.py"
+          },
+          "timestamp": "2026-03-14T21:07:32.507Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now let me implement all the changes:",
+          "timestamp": "2026-03-14T21:07:34.188Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/openai.py",
+            "new_string": "class OpenAIProvider(LLMProvider):\n    def __init__(\n        self,\n        model: str = \"gpt-4o\",\n        max_tokens: int = 1024,\n        base_url: str | None = None,\n        api_key: str | None = None,\n        api_key_env: str = \"OPENAI_API_KEY\",\n        supports_structured_output: bool = True,\n    ):\n        try:\n            import openai\n        except ImportError:\n            raise ImportError(\n                \"OpenAI SDK not installed. Run:\\n\\n\"\n                \"  pip install 'agent-verdict[openai]'\\n\"\n            )\n\n        import os\n\n        resolved_key = api_key or os.environ.get(api_key_env)\n        if not resolved_key:\n            raise RuntimeError(\n                f\"{api_key_env} not set. Export it first:\\n\\n\"\n                f\"  export {api_key_env}=...\\n\"\n            )\n\n        self.client = openai.AsyncOpenAI(api_key=resolved_key, base_url=base_url)\n        self.model = model\n        self.max_tokens = max_tokens\n        self._supports_structured_output = supports_structured_output",
+            "old_string": "class OpenAIProvider(LLMProvider):\n    def __init__(self, model: str = \"gpt-4o\", max_tokens: int = 1024):\n        try:\n            import openai\n        except ImportError:\n            raise ImportError(\n                \"OpenAI SDK not installed. Run:\\n\\n\"\n                \"  pip install 'agent-verdict[openai]'\\n\"\n            )\n\n        import os\n\n        if not os.environ.get(\"OPENAI_API_KEY\"):\n            raise RuntimeError(\n                \"OPENAI_API_KEY not set. Export it first:\\n\\n\"\n                \"  export OPENAI_API_KEY=sk-...\\n\"\n            )\n\n        self.client = openai.AsyncOpenAI()\n        self.model = model\n        self.max_tokens = max_tokens",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:07:39.378Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/openai.py",
+            "new_string": "    async def complete_structured(\n        self,\n        messages: list[LLMMessage],\n        schema: Type[BaseModel],\n    ) -> dict[str, Any]:\n        \"\"\"Use OpenAI's response_format with json_schema for structured output.\n\n        Falls back to base class JSON parsing for providers that don't support\n        structured output (e.g. DeepSeek, Kimi).\n        \"\"\"\n        if not self._supports_structured_output:\n            return await super().complete_structured(messages, schema)\n\n        json_schema = schema.model_json_schema()",
+            "old_string": "    async def complete_structured(\n        self,\n        messages: list[LLMMessage],\n        schema: Type[BaseModel],\n    ) -> dict[str, Any]:\n        \"\"\"Use OpenAI's response_format with json_schema for structured output.\"\"\"\n        json_schema = schema.model_json_schema()",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:08:33.082Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now create the DeepSeek and Kimi providers:",
+          "timestamp": "2026-03-14T21:08:42.918Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "input": {
+            "content": "from __future__ import annotations\n\nfrom .openai import OpenAIProvider\n\n\nclass DeepSeekProvider(OpenAIProvider):\n    def __init__(self, model: str = \"deepseek-chat\", max_tokens: int = 1024):\n        super().__init__(\n            model=model,\n            max_tokens=max_tokens,\n            base_url=\"https://api.deepseek.com\",\n            api_key_env=\"DEEPSEEK_API_KEY\",\n            supports_structured_output=False,\n        )\n",
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/deepseek.py"
+          },
+          "timestamp": "2026-03-14T21:08:44.858Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "input": {
+            "content": "from __future__ import annotations\n\nfrom .openai import OpenAIProvider\n\n\nclass KimiProvider(OpenAIProvider):\n    def __init__(self, model: str = \"kimi-k2-0711-preview\", max_tokens: int = 1024):\n        super().__init__(\n            model=model,\n            max_tokens=max_tokens,\n            base_url=\"https://api.moonshot.cn/v1\",\n            api_key_env=\"MOONSHOT_API_KEY\",\n            supports_structured_output=False,\n        )\n",
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/kimi.py"
+          },
+          "timestamp": "2026-03-14T21:08:46.560Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the CLI to support the new providers:",
+          "timestamp": "2026-03-14T21:08:50.253Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/cli.py",
+            "new_string": "def _detect_provider() -> str:\n    \"\"\"Auto-detect provider from available API keys.\"\"\"\n    import os\n    if os.environ.get(\"ANTHROPIC_API_KEY\"):\n        return \"anthropic\"\n    if os.environ.get(\"OPENAI_API_KEY\"):\n        return \"openai\"\n    if os.environ.get(\"DEEPSEEK_API_KEY\"):\n        return \"deepseek\"\n    if os.environ.get(\"MOONSHOT_API_KEY\"):\n        return \"kimi\"\n    print(\n        \"Error: No API key found. Set one of:\\n\\n\"\n        \"  export ANTHROPIC_API_KEY=sk-ant-...\\n\"\n        \"  export OPENAI_API_KEY=sk-...\\n\"\n        \"  export DEEPSEEK_API_KEY=sk-...\\n\"\n        \"  export MOONSHOT_API_KEY=sk-...\\n\",\n        file=sys.stderr,\n    )\n    sys.exit(1)",
+            "old_string": "def _detect_provider() -> str:\n    \"\"\"Auto-detect provider from available API keys.\"\"\"\n    import os\n    if os.environ.get(\"ANTHROPIC_API_KEY\"):\n        return \"anthropic\"\n    if os.environ.get(\"OPENAI_API_KEY\"):\n        return \"openai\"\n    print(\n        \"Error: No API key found. Set one of:\\n\\n\"\n        \"  export ANTHROPIC_API_KEY=sk-ant-...\\n\"\n        \"  export OPENAI_API_KEY=sk-...\\n\",\n        file=sys.stderr,\n    )\n    sys.exit(1)",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:08:54.582Z"
+        },
+        {
+          "type": "user",
+          "text": "is kimi k2 0711 latest?",
+          "timestamp": "2026-03-14T21:09:22.738Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "ToolSearch",
+          "input": {
+            "max_results": 1,
+            "query": "select:WebSearch"
+          },
+          "timestamp": "2026-03-14T21:09:30.149Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebSearch",
+          "input": {
+            "query": "Kimi K2 latest model API model ID 2026"
+          },
+          "timestamp": "2026-03-14T21:09:33.447Z"
+        },
+        {
+          "type": "assistant",
+          "text": "**Kimi K2 0711 is not the latest.** The latest is **Kimi K2.5**, released January 2026. Let me also check the exact API model ID on Moonshot's platform.",
+          "timestamp": "2026-03-14T21:09:44.617Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebSearch",
+          "input": {
+            "allowed_domains": [
+              "platform.moonshot.ai",
+              "kimi.com",
+              "github.com"
+            ],
+            "query": "Moonshot AI platform API model ID kimi-k2.5 moonshot.ai 2026"
+          },
+          "timestamp": "2026-03-14T21:09:45.699Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "ToolSearch",
+          "input": {
+            "max_results": 1,
+            "query": "select:WebFetch"
+          },
+          "timestamp": "2026-03-14T21:09:54.364Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebFetch",
+          "input": {
+            "prompt": "What are the exact API model IDs for Kimi K2.5? List all model names/IDs that can be used in API calls (e.g. in the \"model\" parameter). Also note the base URL for the API.",
+            "url": "https://platform.moonshot.ai/docs/guide/kimi-k2-5-quickstart"
+          },
+          "timestamp": "2026-03-14T21:09:59.314Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebFetch",
+          "input": {
+            "prompt": "List all available model IDs/names and their pricing. I need the exact model ID strings used in API calls.",
+            "url": "https://platform.moonshot.ai/docs/pricing/chat"
+          },
+          "timestamp": "2026-03-14T21:10:00.358Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebFetch",
+          "input": {
+            "prompt": "What are the exact API model IDs for Kimi K2.5? Look for model names used in API examples (e.g. \"kimi-k2.5-...\" or similar). Also what is the API base URL?",
+            "url": "https://github.com/MoonshotAI/Kimi-K2.5"
+          },
+          "timestamp": "2026-03-14T21:10:08.541Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebSearch",
+          "input": {
+            "query": "kimi k2.5 API model name \"model\": \"kimi\" openai compatible base_url moonshot"
+          },
+          "timestamp": "2026-03-14T21:10:22.486Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebFetch",
+          "input": {
+            "prompt": "What is the exact API model ID string for Kimi K2.5 when using Moonshot's API? Look for code examples showing the \"model\" parameter value. Also what is the base_url?",
+            "url": "https://www.codecademy.com/article/kimi-k-2-5-complete-guide-to-moonshots-ai-model"
+          },
+          "timestamp": "2026-03-14T21:10:46.406Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebSearch",
+          "input": {
+            "query": "moonshot ai API \"kimi-k2.5\" OR \"k2.5-0127\" model id python example code"
+          },
+          "timestamp": "2026-03-14T21:10:55.988Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Got the details. The latest is **Kimi K2.5**, and the correct base URL is `https://api.moonshot.ai/v1` (not `moonshot.cn`). Let me also verify the DeepSeek model ID, then update both providers.",
+          "timestamp": "2026-03-14T21:11:07.658Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "WebSearch",
+          "input": {
+            "query": "DeepSeek API latest model ID 2026 \"deepseek-chat\" OR \"deepseek-v3\" OR \"deepseek-r1\""
+          },
+          "timestamp": "2026-03-14T21:11:08.609Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now I have accurate info. Let me update both provider files with the correct details.",
+          "timestamp": "2026-03-14T21:11:19.255Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/kimi.py"
+          },
+          "timestamp": "2026-03-14T21:11:20.000Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/kimi.py",
+            "new_string": "    def __init__(self, model: str = \"kimi-k2.5\", max_tokens: int = 1024):\n        super().__init__(\n            model=model,\n            max_tokens=max_tokens,\n            base_url=\"https://api.moonshot.ai/v1\",\n            api_key_env=\"MOONSHOT_API_KEY\",\n            supports_structured_output=False,\n        )",
+            "old_string": "    def __init__(self, model: str = \"kimi-k2-0711-preview\", max_tokens: int = 1024):\n        super().__init__(\n            model=model,\n            max_tokens=max_tokens,\n            base_url=\"https://api.moonshot.cn/v1\",\n            api_key_env=\"MOONSHOT_API_KEY\",\n            supports_structured_output=False,\n        )",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:11:24.095Z"
+        },
+        {
+          "type": "assistant",
+          "text": "No, `kimi-k2-0711-preview` is **not** the latest. The latest Kimi model is **Kimi K2.5** (released January 2026). I've updated the default to `kimi-k2.5` and also fixed the base URL from `api.moonshot.cn` to `api.moonshot.ai`.\n\nDeepSeek's `deepseek-chat` (maps to DeepSeek-V3.2) is current and correct.\n\nWant me to continue with the rest of the implementation (CLI, MCP server, pyproject.toml, install script, README updates)?\n\nSources:\n- [Moonshot AI Platform](https://platform.moonshot.ai/)\n- [Kimi K2.5 Quickstart](https://platform.moonshot.ai/docs/guide/kimi-k2-5-quickstart)\n- [Kimi K2.5 on GitHub](https://github.com/MoonshotAI/Kimi-K2.5)\n- [DeepSeek API Docs - List Models](https://api-docs.deepseek.com/api/list-models)\n- [DeepSeek V3.2 Release](https://api-docs.deepseek.com/news/news251201)",
+          "timestamp": "2026-03-14T21:11:33.379Z"
+        },
+        {
+          "type": "user",
+          "text": "we need to give flexibility to use whatever ai model they wanna use",
+          "timestamp": "2026-03-14T21:11:55.991Z"
+        },
+        {
+          "type": "user",
+          "text": "[Request interrupted by user]",
+          "timestamp": "2026-03-14T21:12:08.593Z"
+        },
+        {
+          "type": "user",
+          "text": "yes continue",
+          "timestamp": "2026-03-14T21:12:10.571Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Good point — the `OpenAIProvider` already accepts `base_url`/`api_key`/`api_key_env` from my earlier edit, so any OpenAI-compatible API works at the Python level. Now I need to expose that flexibility in the CLI and MCP server too. Let me finish everything.",
+          "timestamp": "2026-03-14T21:12:19.755Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/cli.py"
+          },
+          "timestamp": "2026-03-14T21:12:19.936Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now let me update everything. The key idea: instead of hardcoding provider names, users can pass `--base-url` and `--api-key-env` to use **any** OpenAI-compatible API. Named providers (deepseek, kimi) are just shortcuts.",
+          "timestamp": "2026-03-14T21:12:24.271Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/cli.py",
+            "new_string": "def _get_provider(\n    provider_name: str | None,\n    model: str | None,\n    base_url: str | None = None,\n    api_key_env: str | None = None,\n):\n    name = provider_name or _detect_provider()\n    try:\n        if name == \"anthropic\":\n            from .llm.anthropic import AnthropicProvider\n            return AnthropicProvider(model=model) if model else AnthropicProvider()\n        elif name == \"deepseek\":\n            from .llm.deepseek import DeepSeekProvider\n            return DeepSeekProvider(model=model) if model else DeepSeekProvider()\n        elif name == \"kimi\":\n            from .llm.kimi import KimiProvider\n            return KimiProvider(model=model) if model else KimiProvider()\n        else:\n            # \"openai\" or any custom OpenAI-compatible provider\n            from .llm.openai import OpenAIProvider\n            kwargs: dict = {}\n            if model:\n                kwargs[\"model\"] = model\n            if base_url:\n                kwargs[\"base_url\"] = base_url\n            if api_key_env:\n                kwargs[\"api_key_env\"] = api_key_env\n            if base_url and not api_key_env:\n                # Custom base_url likely doesn't support strict structured output\n                kwargs[\"supports_structured_output\"] = False\n            return OpenAIProvider(**kwargs)\n    except (ImportError, RuntimeError) as e:\n        print(f\"Error: {e}\", file=sys.stderr)\n        sys.exit(1)",
+            "old_string": "def _get_provider(provider_name: str | None, model: str | None):\n    name = provider_name or _detect_provider()\n    try:\n        if name == \"openai\":\n            from .llm.openai import OpenAIProvider\n            return OpenAIProvider(model=model) if model else OpenAIProvider()\n        else:\n            from .llm.anthropic import AnthropicProvider\n            return AnthropicProvider(model=model) if model else AnthropicProvider()\n    except (ImportError, RuntimeError) as e:\n        print(f\"Error: {e}\", file=sys.stderr)\n        sys.exit(1)",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:12:31.750Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the `_run_*` functions to pass through `base_url` and `api_key_env`:",
+          "timestamp": "2026-03-14T21:12:38.133Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/cli.py",
+            "new_string": "    llm = _get_provider(args.provider, args.model, args.base_url, args.api_key_env)\n    pipeline = VerdictPipeline(llm=llm, config=config)\n    return await pipeline.evaluate(_read_result(args), task_context=args.context)\n\n\nasync def _run_check(args) -> Verdict:\n    from .pipeline import VerdictPipeline\n    from .stages import ConfidenceStage\n\n    config = VerdictConfig(\n        confidence_threshold=args.confidence_threshold,\n        relevance_threshold=args.relevance_threshold,\n    )\n    llm = _get_provider(args.provider, args.model, args.base_url, args.api_key_env)\n    pipeline = VerdictPipeline(llm=llm, config=config, stages=[ConfidenceStage()])\n    return await pipeline.evaluate(_read_result(args), task_context=args.context)\n\n\nasync def _run_attack(args) -> Verdict:\n    from .models import Verdict as VerdictModel\n    from .stages import AdversarialStage\n\n    config = VerdictConfig(require_defense=args.require_defense)\n    llm = _get_provider(args.provider, args.model, args.base_url, args.api_key_env)",
+            "old_string": "    llm = _get_provider(args.provider, args.model)\n    pipeline = VerdictPipeline(llm=llm, config=config)\n    return await pipeline.evaluate(_read_result(args), task_context=args.context)\n\n\nasync def _run_check(args) -> Verdict:\n    from .pipeline import VerdictPipeline\n    from .stages import ConfidenceStage\n\n    config = VerdictConfig(\n        confidence_threshold=args.confidence_threshold,\n        relevance_threshold=args.relevance_threshold,\n    )\n    llm = _get_provider(args.provider, args.model)\n    pipeline = VerdictPipeline(llm=llm, config=config, stages=[ConfidenceStage()])\n    return await pipeline.evaluate(_read_result(args), task_context=args.context)\n\n\nasync def _run_attack(args) -> Verdict:\n    from .models import Verdict as VerdictModel\n    from .stages import AdversarialStage\n\n    config = VerdictConfig(require_defense=args.require_defense)\n    llm = _get_provider(args.provider, args.model)",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:12:44.746Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the argparse section to add the new CLI flags and provider choices:",
+          "timestamp": "2026-03-14T21:12:49.201Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/cli.py",
+            "new_string": "    parser.add_argument(\n        \"-p\", \"--provider\", default=None,\n        choices=[\"anthropic\", \"openai\", \"deepseek\", \"kimi\"],\n        help=\"LLM provider (auto-detected from API keys if not set)\",\n    )\n    parser.add_argument(\"-m\", \"--model\", default=None, help=\"model name\")\n    parser.add_argument(\n        \"--base-url\", default=None,\n        help=\"custom OpenAI-compatible API base URL (use with -p openai)\",\n    )\n    parser.add_argument(\n        \"--api-key-env\", default=None,\n        help=\"env var name holding the API key (default: per-provider)\",\n    )\n    parser.add_argument(\"--json\", action=\"store_true\", help=\"output raw JSON\")\n    parser.add_argument(\"-v\", \"--verbose\", action=\"store_true\", help=\"show extra details\")",
+            "old_string": "    parser.add_argument(\n        \"-p\", \"--provider\", default=None, choices=[\"anthropic\", \"openai\"],\n        help=\"LLM provider (auto-detected from API keys if not set)\",\n    )\n    parser.add_argument(\"-m\", \"--model\", default=None, help=\"model name\")\n    parser.add_argument(\"--json\", action=\"store_true\", help=\"output raw JSON\")\n    parser.add_argument(\"-v\", \"--verbose\", action=\"store_true\", help=\"show extra details\")",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:12:54.126Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the MCP server:",
+          "timestamp": "2026-03-14T21:12:58.881Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "def _detect_provider() -> str:\n    \"\"\"Auto-detect from VERDICT_PROVIDER env var, or from which API key is set.\"\"\"\n    explicit = os.environ.get(\"VERDICT_PROVIDER\", \"\").lower()\n    if explicit:\n        return explicit\n    if os.environ.get(\"ANTHROPIC_API_KEY\"):\n        return \"anthropic\"\n    if os.environ.get(\"OPENAI_API_KEY\"):\n        return \"openai\"\n    if os.environ.get(\"DEEPSEEK_API_KEY\"):\n        return \"deepseek\"\n    if os.environ.get(\"MOONSHOT_API_KEY\"):\n        return \"kimi\"\n    return \"anthropic\"\n\n\ndef _get_provider():\n    provider_name = _detect_provider()\n    model = os.environ.get(\"VERDICT_MODEL\")\n    base_url = os.environ.get(\"VERDICT_BASE_URL\")\n    api_key_env = os.environ.get(\"VERDICT_API_KEY_ENV\")\n\n    try:\n        if provider_name == \"anthropic\":\n            from .llm.anthropic import AnthropicProvider\n\n            return AnthropicProvider(model=model) if model else AnthropicProvider()\n        elif provider_name == \"deepseek\":\n            from .llm.deepseek import DeepSeekProvider\n\n            return DeepSeekProvider(model=model) if model else DeepSeekProvider()\n        elif provider_name == \"kimi\":\n            from .llm.kimi import KimiProvider\n\n            return KimiProvider(model=model) if model else KimiProvider()\n        else:\n            from .llm.openai import OpenAIProvider\n\n            kwargs: dict = {}\n            if model:\n                kwargs[\"model\"] = model\n            if base_url:\n                kwargs[\"base_url\"] = base_url\n            if api_key_env:\n                kwargs[\"api_key_env\"] = api_key_env\n            if base_url and not api_key_env:\n                kwargs[\"supports_structured_output\"] = False\n            return OpenAIProvider(**kwargs)\n    except ImportError as e:\n        raise RuntimeError(\n            f\"Provider '{provider_name}' not installed. \"\n            f\"Run: pip install 'agent-verdict[openai,mcp]'\"\n        ) from e",
+            "old_string": "def _detect_provider() -> str:\n    \"\"\"Auto-detect from VERDICT_PROVIDER env var, or from which API key is set.\"\"\"\n    explicit = os.environ.get(\"VERDICT_PROVIDER\", \"\").lower()\n    if explicit:\n        return explicit\n    if os.environ.get(\"ANTHROPIC_API_KEY\"):\n        return \"anthropic\"\n    if os.environ.get(\"OPENAI_API_KEY\"):\n        return \"openai\"\n    return \"anthropic\"\n\n\ndef _get_provider():\n    provider_name = _detect_provider()\n    model = os.environ.get(\"VERDICT_MODEL\")\n\n    try:\n        if provider_name == \"openai\":\n            from .llm.openai import OpenAIProvider\n\n            return OpenAIProvider(model=model) if model else OpenAIProvider()\n        else:\n            from .llm.anthropic import AnthropicProvider\n\n            return AnthropicProvider(model=model) if model else AnthropicProvider()\n    except ImportError as e:\n        raise RuntimeError(\n            f\"Provider '{provider_name}' not installed. \"\n            f\"Run: pip install 'agent-verdict[{provider_name},mcp]'\"\n        ) from e",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:13:08.418Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update `__init__.py` to export the new providers:",
+          "timestamp": "2026-03-14T21:13:13.701Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/__init__.py",
+            "new_string": "from .decorator import DroppedResultError, verdict\nfrom .llm.base import LLMProvider\nfrom .llm.openai import OpenAIProvider\nfrom .models import LLMMessage, LLMResponse, Verdict, VerdictConfig\nfrom .pipeline import VerdictPipeline\nfrom .stages import (\n    AdversarialStage,\n    ConfidenceStage,\n    EntailmentStage,\n    LogprobStage,\n    SelfConsistencyStage,\n    SemanticSimilarityStage,\n    Stage,\n    VerificationStage,\n)\n\n__all__ = [\n    \"AdversarialStage\",\n    \"ConfidenceStage\",\n    \"DroppedResultError\",\n    \"EntailmentStage\",\n    \"LLMMessage\",\n    \"LLMProvider\",\n    \"LLMResponse\",\n    \"LogprobStage\",\n    \"OpenAIProvider\",\n    \"SelfConsistencyStage\",\n    \"SemanticSimilarityStage\",\n    \"Stage\",\n    \"Verdict\",\n    \"VerdictConfig\",\n    \"VerdictPipeline\",\n    \"VerificationStage\",\n    \"verdict\",\n]",
+            "old_string": "from .decorator import DroppedResultError, verdict\nfrom .llm.base import LLMProvider\nfrom .models import LLMMessage, LLMResponse, Verdict, VerdictConfig\nfrom .pipeline import VerdictPipeline\nfrom .stages import (\n    AdversarialStage,\n    ConfidenceStage,\n    EntailmentStage,\n    LogprobStage,\n    SelfConsistencyStage,\n    SemanticSimilarityStage,\n    Stage,\n    VerificationStage,\n)\n\n__all__ = [\n    \"AdversarialStage\",\n    \"ConfidenceStage\",\n    \"DroppedResultError\",\n    \"EntailmentStage\",\n    \"LLMMessage\",\n    \"LLMProvider\",\n    \"LLMResponse\",\n    \"LogprobStage\",\n    \"SelfConsistencyStage\",\n    \"SemanticSimilarityStage\",\n    \"Stage\",\n    \"Verdict\",\n    \"VerdictConfig\",\n    \"VerdictPipeline\",\n    \"VerificationStage\",\n    \"verdict\",\n]",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:13:19.976Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update `pyproject.toml` — DeepSeek and Kimi both use the `openai` SDK, so no new deps needed, but add named extras for convenience:",
+          "timestamp": "2026-03-14T21:13:26.044Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/pyproject.toml",
+            "new_string": "[project.optional-dependencies]\nanthropic = [\"anthropic>=0.40\"]\nopenai = [\"openai>=1.0\"]\ndeepseek = [\"openai>=1.0\"]\nkimi = [\"openai>=1.0\"]\nmcp = [\"mcp>=1.0\"]\nembeddings = [\"sentence-transformers>=3.0\"]\nnli = [\"transformers>=4.40\", \"torch>=2.0\"]\nall = [\n    \"anthropic>=0.40\",\n    \"openai>=1.0\",\n    \"sentence-transformers>=3.0\",\n    \"transformers>=4.40\",\n    \"torch>=2.0\",\n    \"mcp>=1.0\",\n]\ndev = [\"pytest>=8.0\", \"pytest-asyncio>=0.24\", \"mcp>=1.0\", \"anthropic>=0.40\", \"openai>=1.0\"]",
+            "old_string": "[project.optional-dependencies]\nanthropic = [\"anthropic>=0.40\"]\nopenai = [\"openai>=1.0\"]\nmcp = [\"mcp>=1.0\"]\nembeddings = [\"sentence-transformers>=3.0\"]\nnli = [\"transformers>=4.40\", \"torch>=2.0\"]\nall = [\n    \"anthropic>=0.40\",\n    \"openai>=1.0\",\n    \"sentence-transformers>=3.0\",\n    \"transformers>=4.40\",\n    \"torch>=2.0\",\n    \"mcp>=1.0\",\n]\ndev = [\"pytest>=8.0\", \"pytest-asyncio>=0.24\", \"mcp>=1.0\", \"anthropic>=0.40\", \"openai>=1.0\"]",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:13:31.139Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the install script:",
+          "timestamp": "2026-03-14T21:13:34.740Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/install.sh",
+            "new_string": "PROVIDER=\"\"\nMCP=false\nfor arg in \"$@\"; do\n    case \"$arg\" in\n        anthropic|claude) PROVIDER=\"anthropic\" ;;\n        openai|gpt)       PROVIDER=\"openai\" ;;\n        deepseek)          PROVIDER=\"deepseek\" ;;\n        kimi|moonshot)     PROVIDER=\"kimi\" ;;\n        all)               PROVIDER=\"anthropic,openai\"; MCP=true ;;\n        mcp)               MCP=true ;;\n    esac\ndone\n\nif [ -z \"$PROVIDER\" ]; then\n    if [ -n \"${ANTHROPIC_API_KEY:-}\" ] && [ -n \"${OPENAI_API_KEY:-}\" ]; then\n        PROVIDER=\"anthropic,openai\"\n    elif [ -n \"${ANTHROPIC_API_KEY:-}\" ]; then\n        PROVIDER=\"anthropic\"\n    elif [ -n \"${OPENAI_API_KEY:-}\" ]; then\n        PROVIDER=\"openai\"\n    elif [ -n \"${DEEPSEEK_API_KEY:-}\" ]; then\n        PROVIDER=\"deepseek\"\n    elif [ -n \"${MOONSHOT_API_KEY:-}\" ]; then\n        PROVIDER=\"kimi\"\n    else\n        PROVIDER=\"anthropic\"\n    fi\nfi",
+            "old_string": "PROVIDER=\"\"\nMCP=false\nfor arg in \"$@\"; do\n    case \"$arg\" in\n        anthropic|claude) PROVIDER=\"anthropic\" ;;\n        openai|gpt)       PROVIDER=\"openai\" ;;\n        all)               PROVIDER=\"anthropic,openai\"; MCP=true ;;\n        mcp)               MCP=true ;;\n    esac\ndone\n\nif [ -z \"$PROVIDER\" ]; then\n    if [ -n \"${ANTHROPIC_API_KEY:-}\" ] && [ -n \"${OPENAI_API_KEY:-}\" ]; then\n        PROVIDER=\"anthropic,openai\"\n    elif [ -n \"${ANTHROPIC_API_KEY:-}\" ]; then\n        PROVIDER=\"anthropic\"\n    elif [ -n \"${OPENAI_API_KEY:-}\" ]; then\n        PROVIDER=\"openai\"\n    else\n        PROVIDER=\"anthropic\"\n    fi\nfi",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:13:40.836Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the API key check section of install.sh:",
+          "timestamp": "2026-03-14T21:13:49.111Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/install.sh",
+            "new_string": "# --- check API key ---\nNEED_KEY=\"\"\nif echo \"$PROVIDER\" | grep -q \"anthropic\"; then\n    if [ -z \"${ANTHROPIC_API_KEY:-}\" ]; then\n        NEED_KEY=\"anthropic\"\n    fi\nfi\nif echo \"$PROVIDER\" | grep -q \"openai\"; then\n    if [ -z \"${OPENAI_API_KEY:-}\" ]; then\n        NEED_KEY=\"${NEED_KEY:+$NEED_KEY and }openai\"\n    fi\nfi\nif echo \"$PROVIDER\" | grep -q \"deepseek\"; then\n    if [ -z \"${DEEPSEEK_API_KEY:-}\" ]; then\n        NEED_KEY=\"${NEED_KEY:+$NEED_KEY and }deepseek\"\n    fi\nfi\nif echo \"$PROVIDER\" | grep -q \"kimi\"; then\n    if [ -z \"${MOONSHOT_API_KEY:-}\" ]; then\n        NEED_KEY=\"${NEED_KEY:+$NEED_KEY and }kimi (moonshot)\"\n    fi\nfi\n\nif [ -n \"$NEED_KEY\" ]; then\n    warn \"Set your API key to get started:\"\n    echo \"\"\n    if echo \"$NEED_KEY\" | grep -q \"anthropic\"; then\n        printf \"    export ANTHROPIC_API_KEY=sk-ant-...\\n\"\n    fi\n    if echo \"$NEED_KEY\" | grep -q \"openai\"; then\n        printf \"    export OPENAI_API_KEY=sk-...\\n\"\n    fi\n    if echo \"$NEED_KEY\" | grep -q \"deepseek\"; then\n        printf \"    export DEEPSEEK_API_KEY=sk-...\\n\"\n    fi\n    if echo \"$NEED_KEY\" | grep -q \"kimi\"; then\n        printf \"    export MOONSHOT_API_KEY=sk-...\\n\"\n    fi\n    echo \"\"\nfi",
+            "old_string": "# --- check API key ---\nNEED_KEY=\"\"\nif echo \"$PROVIDER\" | grep -q \"anthropic\"; then\n    if [ -z \"${ANTHROPIC_API_KEY:-}\" ]; then\n        NEED_KEY=\"anthropic\"\n    fi\nfi\nif echo \"$PROVIDER\" | grep -q \"openai\"; then\n    if [ -z \"${OPENAI_API_KEY:-}\" ]; then\n        NEED_KEY=\"${NEED_KEY:+$NEED_KEY and }openai\"\n    fi\nfi\n\nif [ -n \"$NEED_KEY\" ]; then\n    warn \"Set your API key to get started:\"\n    echo \"\"\n    if echo \"$NEED_KEY\" | grep -q \"anthropic\"; then\n        printf \"    export ANTHROPIC_API_KEY=sk-ant-...\\n\"\n    fi\n    if echo \"$NEED_KEY\" | grep -q \"openai\"; then\n        printf \"    export OPENAI_API_KEY=sk-...\\n\"\n    fi\n    echo \"\"\nfi",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:13:55.772Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the README:",
+          "timestamp": "2026-03-14T21:13:58.714Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md"
+          },
+          "timestamp": "2026-03-14T21:13:58.957Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "input": {
+            "content": "# agent-verdict\n\n<p align=\"center\">\n  <img src=\"demo/demo.gif\" alt=\"agent-verdict demo\" width=\"800\">\n</p>\n\nVerify your AI agent's answers. Confidence scoring, independent verification, and adversarial stress-testing in one pipeline.\n\n```\nAgent's answer → Confidence check → Verification → Adversarial attack → Verdict\n```\n\nIf it fails at any step, the rest don't run. No wasted LLM calls.\n\n## Install\n\n```bash\ncurl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh\n```\n\nOptions: `sh -s anthropic`, `sh -s openai`, `sh -s deepseek`, `sh -s kimi`, `sh -s all`, `sh -s mcp`.\n\n## Providers\n\nWorks with any LLM. Built-in support for:\n\n| Provider | API key env var | Default model | Install extra |\n|----------|----------------|---------------|---------------|\n| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` | `agent-verdict[anthropic]` |\n| OpenAI | `OPENAI_API_KEY` | `gpt-4o` | `agent-verdict[openai]` |\n| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` | `agent-verdict[deepseek]` |\n| Kimi (Moonshot) | `MOONSHOT_API_KEY` | `kimi-k2.5` | `agent-verdict[kimi]` |\n\nSet your API key:\n\n```bash\nexport ANTHROPIC_API_KEY=sk-ant-...\n# or\nexport OPENAI_API_KEY=sk-...\n# or\nexport DEEPSEEK_API_KEY=sk-...\n# or\nexport MOONSHOT_API_KEY=sk-...\n```\n\n**Any OpenAI-compatible API** works too — just pass `--base-url` and `--api-key-env`:\n\n```bash\n# use any OpenAI-compatible provider\nagent-verdict -p openai --base-url https://api.example.com/v1 --api-key-env MY_API_KEY \\\n    eval \"result\" -c \"task\"\n```\n\n## Usage\n\n### CLI\n\n```bash\n# full pipeline (auto-detects provider from API key)\nagent-verdict evaluate \"SQL injection on line 14\" -c \"Find security bugs\"\n\n# pick a specific provider\nagent-verdict -p deepseek eval \"SQL injection on line 14\" -c \"Find security bugs\"\n\n# pick a specific model\nagent-verdict -p openai -m gpt-4o-mini eval \"result\" -c \"task\"\n\n# pipe from another tool\nmy-agent analyze code.py | agent-verdict eval -c \"Find security bugs\"\n\n# quick confidence check (1 LLM call)\nagent-verdict check \"server crashed due to OOM\" -c \"Diagnose outage\"\n\n# adversarial only\nagent-verdict attack \"race condition in pool.get()\" -c \"Find concurrency bugs\"\n\n# JSON output\nagent-verdict --json eval \"result\" -c \"task\" > verdict.json\n```\n\nExit code `0` = passed, `1` = dropped.\n\n### Python\n\n```python\nfrom agent_verdict import verdict\nfrom agent_verdict.llm.anthropic import AnthropicProvider\n\nllm = AnthropicProvider()\n\n@verdict(llm=llm, task_context=\"Find security bugs in Python code\")\ndef analyze(code: str) -> str:\n    return \"Found SQL injection in the login handler\"\n\nresult = analyze(user_code)\nresult.confidence        # 0.87\nresult.defended          # True\nresult.dropped           # False\n```\n\nUse any provider:\n\n```python\nfrom agent_verdict.llm.openai import OpenAIProvider\nfrom agent_verdict.llm.deepseek import DeepSeekProvider\nfrom agent_verdict.llm.kimi import KimiProvider\n\nllm = DeepSeekProvider()                     # uses DEEPSEEK_API_KEY\nllm = KimiProvider(model=\"kimi-k2.5\")       # uses MOONSHOT_API_KEY\n\n# any OpenAI-compatible API\nllm = OpenAIProvider(\n    model=\"my-model\",\n    base_url=\"https://api.example.com/v1\",\n    api_key_env=\"MY_API_KEY\",\n)\n```\n\nOr use the pipeline directly:\n\n```python\nfrom agent_verdict import VerdictPipeline, VerdictConfig\n\npipeline = VerdictPipeline(llm=llm, config=VerdictConfig(confidence_threshold=0.7))\nresult = await pipeline.evaluate(\"race condition in pool\", task_context=\"Find concurrency bugs\")\n```\n\n### MCP (Claude Code / Cursor)\n\n```bash\ncurl -fsSL https://raw.githubusercontent.com/sharifli4/agent-verdict/main/install.sh | sh -s mcp\nclaude mcp add agent-verdict -- /path/to/.venv/bin/agent-verdict-mcp\n```\n\nConfigure via env vars: `VERDICT_PROVIDER`, `VERDICT_MODEL`, `VERDICT_BASE_URL`, `VERDICT_API_KEY_ENV`.\n\nTools: `evaluate` (customizable via `stages` param), `check_confidence`, `adversarial_check`, `self_consistency_check`, `semantic_similarity_check`, `entailment_check`, `logprob_check`.\n\n## Verdict object\n\n```python\nresult.confidence          # 0.0-1.0\nresult.context_relevance   # 0.0-1.0\nresult.justification       # why the answer makes sense\nresult.counter_argument    # best attack against the answer\nresult.defense             # response to that attack\nresult.defended            # did the defense hold?\nresult.dropped             # was the answer rejected?\nresult.drop_reason         # why it was rejected\n```\n\n## Evaluation algorithms\n\n| Algorithm | Technique | Catches |\n|-----------|-----------|---------|\n| **Confidence Scoring** | LLM rates confidence and relevance 0.0-1.0 | Low-quality or vague answers |\n| **Independent Verification** | LLM re-derives answer without seeing the original | Answers that don't hold up independently |\n| **Adversarial Dialectic** | Generate counter-argument, then defend against it | Plausible but flawed answers |\n| **Self-Consistency** | [Wang et al. 2022](https://arxiv.org/abs/2203.11171) — sample N answers, measure agreement | Unstable/unreliable answers |\n| **Cosine Similarity** | Sentence embeddings ([MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)) | Off-topic answers |\n| **NLI Entailment** | [DeBERTa-v3](https://huggingface.co/cross-encoder/nli-deberta-v3-small) classification | Hallucinated/contradicting answers |\n| **Logprob Calibration** | Token log-probabilities via `exp(mean_logprob)` | Internally uncertain answers |\n\nDefault pipeline uses the first 3 (4 LLM calls). Stages 5-7 use different models, breaking the \"same brain grading itself\" problem.\n\n## Stages\n\n| Stage | LLM calls | Install |\n|-------|-----------|---------|\n| `ConfidenceStage` | 1 | included |\n| `VerificationStage` | 1 | included |\n| `AdversarialStage` | 2 | included |\n| `SelfConsistencyStage(n)` | 2n | included |\n| `SemanticSimilarityStage` | 0 | `pip install agent-verdict[embeddings]` |\n| `EntailmentStage` | 0 | `pip install agent-verdict[nli]` |\n| `LogprobStage` | 1 | OpenAI only |\n\nCustom pipeline:\n\n```python\nfrom agent_verdict import VerdictPipeline, ConfidenceStage, EntailmentStage, AdversarialStage\n\npipeline = VerdictPipeline(llm=llm, stages=[\n    ConfidenceStage(),\n    EntailmentStage(),\n    AdversarialStage(),\n])\n```\n\n## Configuration\n\n```python\nVerdictConfig(\n    confidence_threshold=0.5,   # below → dropped\n    relevance_threshold=0.4,    # below → dropped\n    require_defense=True,       # can't defend → dropped\n)\n```\n\nCLI: `--confidence-threshold`, `--relevance-threshold`, `--no-require-defense`.\n\n## Extend\n\n```python\n# Custom LLM provider — implement one method\nclass MyProvider(LLMProvider):\n    async def complete(self, messages):\n        return LLMResponse(content=await my_llm(messages[0].content))\n\n# Or subclass OpenAIProvider for any OpenAI-compatible API\nclass MyProvider(OpenAIProvider):\n    def __init__(self):\n        super().__init__(\n            model=\"my-model\",\n            base_url=\"https://api.example.com/v1\",\n            api_key_env=\"MY_API_KEY\",\n        )\n\n# Custom stage\nclass MyStage(Stage):\n    async def run(self, verdict, llm, task_context, config):\n        return verdict.model_copy(update={\"confidence\": 0.99})\n```\n\n## Development\n\n```bash\ngit clone https://github.com/sharifli4/agent-verdict.git\ncd agent-verdict\npip install -e \".[dev]\"\npytest tests/ -v    # no API keys needed, uses mock provider\n```\n",
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md"
+          },
+          "timestamp": "2026-03-14T21:14:35.898Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now let me run the tests to make sure nothing is broken:",
+          "timestamp": "2026-03-14T21:14:44.733Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "pip install -e \".[dev]\" 2>&1 | tail -5",
+            "description": "Install dev dependencies",
+            "timeout": 120000
+          },
+          "timestamp": "2026-03-14T21:14:45.783Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "which python3 && python3 -m pip install -e \".[dev]\" 2>&1 | tail -5",
+            "description": "Install dev dependencies with python3",
+            "timeout": 120000
+          },
+          "timestamp": "2026-03-14T21:14:50.586Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "which uv && uv pip install -e \".[dev]\" 2>&1 | tail -5",
+            "description": "Install with uv",
+            "timeout": 120000
+          },
+          "timestamp": "2026-03-14T21:15:06.099Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "uv venv && uv pip install -e \".[dev]\" 2>&1 | tail -5",
+            "description": "Create venv and install",
+            "timeout": 120000
+          },
+          "timestamp": "2026-03-14T21:15:11.784Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": ".venv/bin/pytest tests/ -v 2>&1",
+            "description": "Run tests",
+            "timeout": 120000
+          },
+          "timestamp": "2026-03-14T21:15:18.631Z"
+        },
+        {
+          "type": "assistant",
+          "text": "All 76 tests pass. Here's a summary of everything that was done:\n\n## Changes made\n\n**New files:**\n- `src/agent_verdict/llm/deepseek.py` — `DeepSeekProvider` (base_url: `api.deepseek.com`, env: `DEEPSEEK_API_KEY`, default model: `deepseek-chat`)\n- `src/agent_verdict/llm/kimi.py` — `KimiProvider` (base_url: `api.moonshot.ai/v1`, env: `MOONSHOT_API_KEY`, default model: `kimi-k2.5`)\n\n**Modified files:**\n- `llm/openai.py` — Added `base_url`, `api_key`, `api_key_env`, `supports_structured_output` params. Any OpenAI-compatible API now works out of the box\n- `cli.py` — Added `--base-url` and `--api-key-env` flags, added `deepseek`/`kimi` to `--provider` choices, updated auto-detection\n- `mcp_server.py` — Added `deepseek`/`kimi` provider support + `VERDICT_BASE_URL`/`VERDICT_API_KEY_ENV` env vars for custom providers\n- `__init__.py` — Exported `OpenAIProvider` for easy subclassing\n- `pyproject.toml` — Added `deepseek` and `kimi` install extras\n- `install.sh` — Added `deepseek`/`kimi`/`moonshot` install options\n- `README.md` — Rewrote with providers table, custom API examples, clearer usage sections\n\n**Key design:** Users can use **any** OpenAI-compatible API in three ways:\n1. Named providers: `-p deepseek`, `-p kimi`\n2. Custom base URL: `-p openai --base-url https://api.example.com/v1 --api-key-env MY_KEY`\n3. Python subclass: `class MyProvider(OpenAIProvider): ...`",
+          "timestamp": "2026-03-14T21:15:34.931Z"
+        },
+        {
+          "type": "user",
+          "text": "push changes",
+          "timestamp": "2026-03-14T21:15:40.926Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git status",
+            "description": "Show working tree status"
+          },
+          "timestamp": "2026-03-14T21:15:44.149Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git diff --stat",
+            "description": "Show diff summary"
+          },
+          "timestamp": "2026-03-14T21:15:44.948Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git log --oneline -5",
+            "description": "Show recent commits"
+          },
+          "timestamp": "2026-03-14T21:15:45.232Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git add README.md install.sh pyproject.toml src/agent_verdict/__init__.py src/agent_verdict/cli.py src/agent_verdict/llm/openai.py src/agent_verdict/llm/deepseek.py src/agent_verdict/llm/kimi.py src/agent_verdict/mcp_server.py && git commit -m \"$(cat <<'EOF'\nAdd multi-provider support: DeepSeek, Kimi, and any OpenAI-compatible API\n\nOpenAIProvider now accepts base_url, api_key, and api_key_env for\nany OpenAI-compatible endpoint. DeepSeek and Kimi are thin subclasses.\nCLI gets --base-url and --api-key-env flags. MCP server reads\nVERDICT_BASE_URL and VERDICT_API_KEY_ENV env vars.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n)\"",
+            "description": "Commit all changes"
+          },
+          "timestamp": "2026-03-14T21:15:50.991Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git push",
+            "description": "Push to remote"
+          },
+          "timestamp": "2026-03-14T21:16:00.164Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Pushed to `main`. Commit `7517602`.",
+          "timestamp": "2026-03-14T21:16:09.423Z"
+        },
+        {
+          "type": "user",
+          "text": "what's your opinion about that project? is it unique? or what could make it unique",
+          "timestamp": "2026-03-14T21:17:00.131Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Honest take:\n\n## What's good\n\n- **The pipeline-with-early-exit pattern** is clean. Most eval tools run everything and waste calls. Failing fast on confidence saves real money.\n- **Mixing LLM judges with offline models** (MiniLM, DeBERTa) is smart — it breaks the \"same brain grading itself\" problem that plagues LLM-as-judge approaches.\n- **The adversarial dialectic** (counter-argument → defense) is the most interesting stage. Most tools just score; this one stress-tests.\n- **Three interfaces** (decorator, CLI with pipes, MCP) make it genuinely usable in different workflows.\n\n## What's not unique\n\nThe core idea — \"use an LLM to judge another LLM's output\" — is crowded. DeepEval, RAGAS, Langchain evaluators, Guardrails AI, TruLens all exist. Confidence scoring and self-consistency are well-known techniques. Someone looking at this would think \"another eval framework.\"\n\n## What could make it unique\n\nA few directions worth considering:\n\n**1. Domain-specific verdict profiles.** Right now stages are generic. Imagine `VerdictProfile.security_audit()` or `VerdictProfile.medical()` with tuned thresholds, domain-specific adversarial prompts, and specialized verification logic. Nobody does this well.\n\n**2. Calibration over time.** Track verdict accuracy across runs — did dropped answers actually turn out to be wrong? Did passed answers hold up? Use this to auto-tune thresholds per user/domain. Move from static thresholds to learned ones.\n\n**3. Multi-agent cross-verification.** Instead of one LLM judging itself, route verification to a *different* provider. Use Claude to verify GPT's answer. Use DeepSeek to attack Anthropic's defense. The multi-provider support you just added makes this possible — but it's not exposed yet.\n\n**4. Verdict chains.** Let verdict results feed back into agent loops. If dropped, the agent retries with the counter-argument as context. This turns agent-verdict from a filter into a self-improvement loop.\n\n**5. Cost/latency budget mode.** \"I have $0.02 and 3 seconds — give me the best verdict you can.\" Auto-select stages based on budget constraints. Nobody does this.\n\nThe biggest differentiator potential is **#3** — you already have the multi-provider infra. A single `pipeline.evaluate(result, verifier_llm=different_provider)` that cross-checks across models would be genuinely novel and hard to replicate in simpler tools.",
+          "timestamp": "2026-03-14T21:17:26.202Z"
+        },
+        {
+          "type": "user",
+          "text": "let's implement multi agent cross verification. but in cool way. each explain it's own point, and write definition of point against toward model",
+          "timestamp": "2026-03-14T21:18:42.250Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Love this idea — a jury deliberation between models. Let me plan and implement it.",
+          "timestamp": "2026-03-14T21:19:20.587Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/models.py"
+          },
+          "timestamp": "2026-03-14T21:19:21.136Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/__init__.py"
+          },
+          "timestamp": "2026-03-14T21:19:21.559Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/base.py"
+          },
+          "timestamp": "2026-03-14T21:19:22.049Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/adversarial.py"
+          },
+          "timestamp": "2026-03-14T21:19:22.453Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now let me design and implement this. The concept: **a jury of different LLMs deliberates on the answer**.",
+          "timestamp": "2026-03-14T21:19:25.428Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/models.py",
+            "new_string": "class JurorPosition(BaseModel):\n    \"\"\"A single juror's position in cross-verification deliberation.\"\"\"\n    juror: str = \"\"\n    vote: str = \"\"  # \"support\" or \"challenge\"\n    argument: str = \"\"\n    counter_to_self: str = \"\"  # steel-man against own position\n    confidence: float = Field(default=0.0, ge=0.0, le=1.0)\n    final_vote: str = \"\"  # after seeing all positions\n    rebuttal: str = \"\"  # response to other jurors\n\n\nclass Verdict(BaseModel):\n    result: Any = None\n    justification: str = \"\"\n    confidence: float = Field(default=0.0, ge=0.0, le=1.0)\n    confidence_reason: str = \"\"\n    context_relevance: float = Field(default=0.0, ge=0.0, le=1.0)\n    counter_argument: str = \"\"\n    defense: str = \"\"\n    defended: bool = False\n    dropped: bool = False\n    drop_reason: str = \"\"\n    deliberation: list[JurorPosition] = Field(default_factory=list)",
+            "old_string": "class Verdict(BaseModel):\n    result: Any = None\n    justification: str = \"\"\n    confidence: float = Field(default=0.0, ge=0.0, le=1.0)\n    confidence_reason: str = \"\"\n    context_relevance: float = Field(default=0.0, ge=0.0, le=1.0)\n    counter_argument: str = \"\"\n    defense: str = \"\"\n    defended: bool = False\n    dropped: bool = False\n    drop_reason: str = \"\"",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:19:31.203Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Good points. Let me address both:\n\n1. **Duration** — I'll run all jurors in parallel with `asyncio.gather`, so wall-clock time ≈ the slowest single LLM call per round, not the sum. A 2-juror deliberation takes roughly the same time as a single adversarial stage.\n\n2. **Optional** — `deliberation` field defaults to an empty list, so it's completely invisible unless you use the `CrossVerificationStage`. The stage itself is opt-in, never part of the default pipeline.\n\nThe `JurorPosition` model is just a data container for the results — it won't add any overhead if not used. Let me proceed with that approach?",
+          "timestamp": "2026-03-14T21:19:54.485Z"
+        },
+        {
+          "type": "user",
+          "text": "yes",
+          "timestamp": "2026-03-14T21:20:15.646Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/models.py",
+            "new_string": "class JurorPosition(BaseModel):\n    \"\"\"A single juror's position in cross-verification deliberation.\"\"\"\n    juror: str = \"\"\n    vote: str = \"\"  # \"support\" or \"challenge\"\n    argument: str = \"\"\n    counter_to_self: str = \"\"  # steel-man against own position\n    confidence: float = Field(default=0.0, ge=0.0, le=1.0)\n    final_vote: str = \"\"  # after seeing all positions\n    rebuttal: str = \"\"  # response to other jurors\n\n\nclass Verdict(BaseModel):\n    result: Any = None\n    justification: str = \"\"\n    confidence: float = Field(default=0.0, ge=0.0, le=1.0)\n    confidence_reason: str = \"\"\n    context_relevance: float = Field(default=0.0, ge=0.0, le=1.0)\n    counter_argument: str = \"\"\n    defense: str = \"\"\n    defended: bool = False\n    dropped: bool = False\n    drop_reason: str = \"\"\n    deliberation: list[JurorPosition] = Field(default_factory=list)",
+            "old_string": "class Verdict(BaseModel):\n    result: Any = None\n    justification: str = \"\"\n    confidence: float = Field(default=0.0, ge=0.0, le=1.0)\n    confidence_reason: str = \"\"\n    context_relevance: float = Field(default=0.0, ge=0.0, le=1.0)\n    counter_argument: str = \"\"\n    defense: str = \"\"\n    defended: bool = False\n    dropped: bool = False\n    drop_reason: str = \"\"",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:20:21.125Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now add the structured output schemas for the LLM responses:",
+          "timestamp": "2026-03-14T21:20:28.193Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/models.py",
+            "new_string": "class DefenseOutput(BaseModel):\n    defense: str\n    defended: bool\n\n\nclass JurorPositionOutput(BaseModel):\n    vote: str  # \"support\" or \"challenge\"\n    argument: str\n    counter_to_self: str\n    confidence: float = Field(ge=0.0, le=1.0)\n\n\nclass JurorDeliberationOutput(BaseModel):\n    final_vote: str  # \"support\" or \"challenge\"\n    rebuttal: str\n    confidence: float = Field(ge=0.0, le=1.0)",
+            "old_string": "class DefenseOutput(BaseModel):\n    defense: str\n    defended: bool",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:20:31.015Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now create the stage:",
+          "timestamp": "2026-03-14T21:20:48.869Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "input": {
+            "content": "from __future__ import annotations\n\nimport asyncio\n\nfrom agent_verdict.llm.base import LLMProvider\nfrom agent_verdict.models import (\n    JurorDeliberationOutput,\n    JurorPosition,\n    JurorPositionOutput,\n    LLMMessage,\n    Verdict,\n    VerdictConfig,\n)\n\nfrom .base import DATA_BOUNDARY_INSTRUCTION, Stage, sanitize_for_prompt\n\nPOSITION_PROMPT = \"\"\"\\\nYou are Juror \"{juror_name}\", an independent evaluator. You must decide whether \\\nto SUPPORT or CHALLENGE the following agent result.\n\n{data_boundary}\n\n{task_context}\n\n{result}\n\nInstructions:\n1. State your vote: \"support\" or \"challenge\"\n2. Present your argument for your position\n3. Steel-man the other side: present the strongest counter-argument against \\\nyour OWN position (be honest, not defensive)\n4. Rate your confidence 0.0-1.0\"\"\"\n\nDELIBERATION_PROMPT = \"\"\"\\\nYou are Juror \"{juror_name}\". You previously voted to {own_vote} the agent's result.\n\nYour argument was:\n{own_argument}\n\nNow the other jurors have presented their positions:\n\n{other_positions}\n\n{data_boundary}\n\n{task_context}\n\n{result}\n\nHaving heard all arguments, state your FINAL vote (\"support\" or \"challenge\"). \\\nYou may change your mind if another juror made a compelling point. \\\nWrite a brief rebuttal addressing the strongest opposing argument. \\\nRate your final confidence 0.0-1.0.\"\"\"\n\n\ndef _juror_name(llm: LLMProvider) -> str:\n    \"\"\"Derive a display name from the provider.\"\"\"\n    model = getattr(llm, \"model\", None)\n    if model:\n        return str(model)\n    return type(llm).__name__\n\n\ndef _format_other_positions(\n    positions: list[JurorPosition], exclude_juror: str\n) -> str:\n    \"\"\"Format all other jurors' positions for the deliberation prompt.\"\"\"\n    lines = []\n    for p in positions:\n        if p.juror == exclude_juror:\n            continue\n        lines.append(\n            f\"--- {p.juror} (votes: {p.vote}, confidence: {p.confidence:.2f}) ---\\n\"\n            f\"Argument: {p.argument}\\n\"\n            f\"Self-counter: {p.counter_to_self}\"\n        )\n    return \"\\n\\n\".join(lines)\n\n\nasync def _get_position(\n    llm: LLMProvider,\n    juror_name: str,\n    verdict: Verdict,\n    task_context: str,\n) -> JurorPosition:\n    \"\"\"Get a single juror's initial position (runs in parallel).\"\"\"\n    prompt = POSITION_PROMPT.format(\n        juror_name=juror_name,\n        data_boundary=DATA_BOUNDARY_INSTRUCTION,\n        task_context=sanitize_for_prompt(task_context, \"task_context\"),\n        result=sanitize_for_prompt(verdict.result, \"agent_result\"),\n    )\n    data = await llm.complete_structured(\n        [LLMMessage(role=\"user\", content=prompt)],\n        JurorPositionOutput,\n    )\n\n    vote = str(data.get(\"vote\", \"support\")).lower().strip()\n    if vote not in (\"support\", \"challenge\"):\n        vote = \"support\"\n\n    return JurorPosition(\n        juror=juror_name,\n        vote=vote,\n        argument=str(data.get(\"argument\", \"\")),\n        counter_to_self=str(data.get(\"counter_to_self\", \"\")),\n        confidence=max(0.0, min(1.0, float(data.get(\"confidence\", 0.5)))),\n    )\n\n\nasync def _get_deliberation(\n    llm: LLMProvider,\n    juror_name: str,\n    position: JurorPosition,\n    all_positions: list[JurorPosition],\n    verdict: Verdict,\n    task_context: str,\n) -> JurorPosition:\n    \"\"\"Get a juror's final vote after seeing all positions (runs in parallel).\"\"\"\n    prompt = DELIBERATION_PROMPT.format(\n        juror_name=juror_name,\n        own_vote=position.vote,\n        own_argument=position.argument,\n        other_positions=_format_other_positions(all_positions, juror_name),\n        data_boundary=DATA_BOUNDARY_INSTRUCTION,\n        task_context=sanitize_for_prompt(task_context, \"task_context\"),\n        result=sanitize_for_prompt(verdict.result, \"agent_result\"),\n    )\n    data = await llm.complete_structured(\n        [LLMMessage(role=\"user\", content=prompt)],\n        JurorDeliberationOutput,\n    )\n\n    final_vote = str(data.get(\"final_vote\", position.vote)).lower().strip()\n    if final_vote not in (\"support\", \"challenge\"):\n        final_vote = position.vote\n\n    return position.model_copy(update={\n        \"final_vote\": final_vote,\n        \"rebuttal\": str(data.get(\"rebuttal\", \"\")),\n        \"confidence\": max(0.0, min(1.0, float(data.get(\"confidence\", position.confidence)))),\n    })\n\n\nclass CrossVerificationStage(Stage):\n    \"\"\"Multi-model jury deliberation.\n\n    Each challenger LLM independently evaluates the result, then all jurors\n    see each other's positions and cast a final vote. All LLM calls within\n    each phase run in parallel.\n\n    Usage:\n        CrossVerificationStage(challengers=[DeepSeekProvider(), KimiProvider()])\n    \"\"\"\n\n    def __init__(self, challengers: list[LLMProvider] | None = None):\n        self.challengers = challengers or []\n\n    async def run(\n        self,\n        verdict: Verdict,\n        llm: LLMProvider,\n        task_context: str,\n        config: VerdictConfig,\n    ) -> Verdict:\n        # Build jury: primary LLM + all challengers\n        jury: list[tuple[str, LLMProvider]] = [(_juror_name(llm), llm)]\n        for c in self.challengers:\n            jury.append((_juror_name(c), c))\n\n        if len(jury) < 2:\n            return verdict\n\n        # Phase 1: All jurors state positions in parallel\n        position_tasks = [\n            _get_position(provider, name, verdict, task_context)\n            for name, provider in jury\n        ]\n        positions: list[JurorPosition] = await asyncio.gather(*position_tasks)\n\n        # Phase 2: All jurors deliberate in parallel (seeing everyone's positions)\n        deliberation_tasks = [\n            _get_deliberation(provider, name, pos, positions, verdict, task_context)\n            for (name, provider), pos in zip(jury, positions)\n        ]\n        final_positions: list[JurorPosition] = await asyncio.gather(*deliberation_tasks)\n\n        # Synthesize: weighted vote\n        support_weight = 0.0\n        challenge_weight = 0.0\n        for p in final_positions:\n            if p.final_vote == \"support\":\n                support_weight += p.confidence\n            else:\n                challenge_weight += p.confidence\n\n        total_weight = support_weight + challenge_weight\n        support_ratio = support_weight / total_weight if total_weight > 0 else 0.5\n\n        support_count = sum(1 for p in final_positions if p.final_vote == \"support\")\n        challenge_count = len(final_positions) - support_count\n        jury_size = len(final_positions)\n\n        # Build confidence reason\n        voter_summary = \", \".join(\n            f\"{p.juror}: {p.final_vote} ({p.confidence:.2f})\"\n            for p in final_positions\n        )\n        reason = f\"Jury vote: {support_count}/{jury_size} support. {voter_summary}\"\n\n        # Blend with existing confidence\n        blended = min(verdict.confidence, support_ratio) if verdict.confidence > 0 else support_ratio\n\n        updates: dict = {\n            \"deliberation\": final_positions,\n            \"confidence\": blended,\n            \"confidence_reason\": reason,\n        }\n\n        if challenge_count > support_count:\n            updates[\"dropped\"] = True\n            updates[\"drop_reason\"] = (\n                f\"Jury rejected: {challenge_count}/{jury_size} voted to challenge\"\n            )\n\n        return verdict.model_copy(update=updates)\n",
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/cross_verification.py"
+          },
+          "timestamp": "2026-03-14T21:21:19.980Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now register it in stages `__init__.py`:",
+          "timestamp": "2026-03-14T21:21:24.197Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/__init__.py",
+            "new_string": "from .base import Stage\nfrom .confidence import ConfidenceStage\nfrom .verification import VerificationStage\nfrom .adversarial import AdversarialStage\nfrom .self_consistency import SelfConsistencyStage\nfrom .semantic_similarity import SemanticSimilarityStage\nfrom .entailment import EntailmentStage\nfrom .logprob import LogprobStage\nfrom .cross_verification import CrossVerificationStage\n\n__all__ = [\n    \"Stage\",\n    \"ConfidenceStage\",\n    \"VerificationStage\",\n    \"AdversarialStage\",\n    \"SelfConsistencyStage\",\n    \"SemanticSimilarityStage\",\n    \"EntailmentStage\",\n    \"LogprobStage\",\n    \"CrossVerificationStage\",\n]",
+            "old_string": "from .base import Stage\nfrom .confidence import ConfidenceStage\nfrom .verification import VerificationStage\nfrom .adversarial import AdversarialStage\nfrom .self_consistency import SelfConsistencyStage\nfrom .semantic_similarity import SemanticSimilarityStage\nfrom .entailment import EntailmentStage\nfrom .logprob import LogprobStage\n\n__all__ = [\n    \"Stage\",\n    \"ConfidenceStage\",\n    \"VerificationStage\",\n    \"AdversarialStage\",\n    \"SelfConsistencyStage\",\n    \"SemanticSimilarityStage\",\n    \"EntailmentStage\",\n    \"LogprobStage\",\n]",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:21:28.105Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Update main `__init__.py`:",
+          "timestamp": "2026-03-14T21:21:39.626Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/__init__.py",
+            "new_string": "from .stages import (\n    AdversarialStage,\n    ConfidenceStage,\n    CrossVerificationStage,\n    EntailmentStage,\n    LogprobStage,\n    SelfConsistencyStage,\n    SemanticSimilarityStage,\n    Stage,\n    VerificationStage,\n)\n\n__all__ = [\n    \"AdversarialStage\",\n    \"ConfidenceStage\",\n    \"CrossVerificationStage\",\n    \"DroppedResultError\",\n    \"EntailmentStage\",\n    \"LLMMessage\",\n    \"LLMProvider\",\n    \"LLMResponse\",\n    \"LogprobStage\",\n    \"OpenAIProvider\",\n    \"SelfConsistencyStage\",\n    \"SemanticSimilarityStage\",\n    \"Stage\",\n    \"Verdict\",\n    \"VerdictConfig\",\n    \"VerdictPipeline\",\n    \"VerificationStage\",\n    \"verdict\",\n]",
+            "old_string": "from .stages import (\n    AdversarialStage,\n    ConfidenceStage,\n    EntailmentStage,\n    LogprobStage,\n    SelfConsistencyStage,\n    SemanticSimilarityStage,\n    Stage,\n    VerificationStage,\n)\n\n__all__ = [\n    \"AdversarialStage\",\n    \"ConfidenceStage\",\n    \"DroppedResultError\",\n    \"EntailmentStage\",\n    \"LLMMessage\",\n    \"LLMProvider\",\n    \"LLMResponse\",\n    \"LogprobStage\",\n    \"OpenAIProvider\",\n    \"SelfConsistencyStage\",\n    \"SemanticSimilarityStage\",\n    \"Stage\",\n    \"Verdict\",\n    \"VerdictConfig\",\n    \"VerdictPipeline\",\n    \"VerificationStage\",\n    \"verdict\",\n]",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:21:44.465Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Register in MCP server:",
+          "timestamp": "2026-03-14T21:21:56.662Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py"
+          },
+          "timestamp": "2026-03-14T21:21:56.934Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "from .stages import (\n    AdversarialStage,\n    ConfidenceStage,\n    CrossVerificationStage,\n    EntailmentStage,\n    LogprobStage,\n    SelfConsistencyStage,\n    SemanticSimilarityStage,\n    Stage,\n    VerificationStage,\n)\n\nSTAGE_REGISTRY: dict[str, type[Stage]] = {\n    \"confidence\": ConfidenceStage,\n    \"verification\": VerificationStage,\n    \"adversarial\": AdversarialStage,\n    \"self_consistency\": SelfConsistencyStage,\n    \"semantic_similarity\": SemanticSimilarityStage,\n    \"entailment\": EntailmentStage,\n    \"logprob\": LogprobStage,\n    \"cross_verification\": CrossVerificationStage,\n}",
+            "old_string": "from .stages import (\n    AdversarialStage,\n    ConfidenceStage,\n    EntailmentStage,\n    LogprobStage,\n    SelfConsistencyStage,\n    SemanticSimilarityStage,\n    Stage,\n    VerificationStage,\n)\n\nSTAGE_REGISTRY: dict[str, type[Stage]] = {\n    \"confidence\": ConfidenceStage,\n    \"verification\": VerificationStage,\n    \"adversarial\": AdversarialStage,\n    \"self_consistency\": SelfConsistencyStage,\n    \"semantic_similarity\": SemanticSimilarityStage,\n    \"entailment\": EntailmentStage,\n    \"logprob\": LogprobStage,\n}",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:22:06.463Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now add a dedicated MCP tool for cross-verification:",
+          "timestamp": "2026-03-14T21:22:19.557Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "@mcp.tool(\n    name=\"cross_verification\",\n    description=(\n        \"Multi-model jury deliberation: multiple LLMs independently evaluate the \"\n        \"agent's result, then see each other's positions and cast a final vote. \"\n        \"Each juror argues for/against, steel-mans the opposing view, and rebuts \"\n        \"after deliberation. Majority vote decides. Set VERDICT_CHALLENGER_PROVIDERS \"\n        \"env var (comma-separated, e.g. 'openai,deepseek') to pick the jury.\"\n    ),\n)\nasync def cross_verification(\n    result: str,\n    task_context: str,\n    confidence_threshold: float = 0.5,\n) -> str:\n    from .models import Verdict\n\n    config = VerdictConfig(confidence_threshold=confidence_threshold)\n    primary = _get_provider()\n    challengers = _get_challengers()\n    stage = CrossVerificationStage(challengers=challengers)\n    verdict = Verdict(result=result, confidence=1.0)\n    verdict = await stage.run(verdict, primary, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)\n\n\ndef _get_challengers():\n    \"\"\"Build challenger providers from VERDICT_CHALLENGER_PROVIDERS env var.\"\"\"\n    raw = os.environ.get(\"VERDICT_CHALLENGER_PROVIDERS\", \"\")\n    if not raw:\n        return []\n    challengers = []\n    for name in raw.split(\",\"):\n        name = name.strip().lower()\n        try:\n            if name == \"anthropic\":\n                from .llm.anthropic import AnthropicProvider\n                challengers.append(AnthropicProvider())\n            elif name == \"openai\":\n                from .llm.openai import OpenAIProvider\n                challengers.append(OpenAIProvider())\n            elif name == \"deepseek\":\n                from .llm.deepseek import DeepSeekProvider\n                challengers.append(DeepSeekProvider())\n            elif name == \"kimi\":\n                from .llm.kimi import KimiProvider\n                challengers.append(KimiProvider())\n        except (ImportError, RuntimeError):\n            pass  # skip unavailable providers\n    return challengers\n\n\ndef main():\n    mcp.run()",
+            "old_string": "def main():\n    mcp.run()",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:22:27.537Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now write tests:",
+          "timestamp": "2026-03-14T21:22:31.326Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/tests/conftest.py"
+          },
+          "timestamp": "2026-03-14T21:22:31.643Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "input": {
+            "content": "from __future__ import annotations\n\nimport pytest\n\nfrom agent_verdict.models import Verdict, VerdictConfig\nfrom agent_verdict.stages.cross_verification import CrossVerificationStage\n\n\nclass TestCrossVerificationStage:\n    @pytest.fixture\n    def support_llm(self, mock_llm):\n        \"\"\"Juror that supports the result in both rounds.\"\"\"\n        return mock_llm(responses=[\n            # Phase 1: position\n            {\n                \"vote\": \"support\",\n                \"argument\": \"The result is well-reasoned\",\n                \"counter_to_self\": \"Could be missing edge cases\",\n                \"confidence\": 0.85,\n            },\n            # Phase 2: deliberation\n            {\n                \"final_vote\": \"support\",\n                \"rebuttal\": \"Edge cases are covered by the implementation\",\n                \"confidence\": 0.9,\n            },\n        ])\n\n    @pytest.fixture\n    def challenge_llm(self, mock_llm):\n        \"\"\"Juror that challenges the result in both rounds.\"\"\"\n        return mock_llm(responses=[\n            # Phase 1: position\n            {\n                \"vote\": \"challenge\",\n                \"argument\": \"The result overlooks critical issues\",\n                \"counter_to_self\": \"The main logic is sound\",\n                \"confidence\": 0.8,\n            },\n            # Phase 2: deliberation\n            {\n                \"final_vote\": \"challenge\",\n                \"rebuttal\": \"Critical issues remain unaddressed\",\n                \"confidence\": 0.85,\n            },\n        ])\n\n    @pytest.fixture\n    def flip_llm(self, mock_llm):\n        \"\"\"Juror that challenges initially, then flips to support.\"\"\"\n        return mock_llm(responses=[\n            # Phase 1: position — challenge\n            {\n                \"vote\": \"challenge\",\n                \"argument\": \"Seems uncertain\",\n                \"counter_to_self\": \"But the core approach is valid\",\n                \"confidence\": 0.5,\n            },\n            # Phase 2: deliberation — flips to support\n            {\n                \"final_vote\": \"support\",\n                \"rebuttal\": \"Other juror made a good point, changing my vote\",\n                \"confidence\": 0.7,\n            },\n        ])\n\n    async def test_majority_support_passes(self, support_llm, mock_llm):\n        \"\"\"Two supporters = passes.\"\"\"\n        challenger = mock_llm(responses=[\n            {\"vote\": \"support\", \"argument\": \"Good\", \"counter_to_self\": \"Maybe\", \"confidence\": 0.8},\n            {\"final_vote\": \"support\", \"rebuttal\": \"Agreed\", \"confidence\": 0.85},\n        ])\n        stage = CrossVerificationStage(challengers=[challenger])\n        verdict = Verdict(result=\"test result\", confidence=0.9)\n        config = VerdictConfig()\n\n        result = await stage.run(verdict, support_llm, \"test task\", config)\n\n        assert not result.dropped\n        assert len(result.deliberation) == 2\n        assert all(p.final_vote == \"support\" for p in result.deliberation)\n\n    async def test_majority_challenge_drops(self, support_llm, challenge_llm, mock_llm):\n        \"\"\"Two challengers vs one supporter = dropped.\"\"\"\n        challenger2 = mock_llm(responses=[\n            {\"vote\": \"challenge\", \"argument\": \"Flawed\", \"counter_to_self\": \"Partially ok\", \"confidence\": 0.75},\n            {\"final_vote\": \"challenge\", \"rebuttal\": \"Still flawed\", \"confidence\": 0.8},\n        ])\n        stage = CrossVerificationStage(challengers=[challenge_llm, challenger2])\n        verdict = Verdict(result=\"test result\", confidence=0.9)\n        config = VerdictConfig()\n\n        result = await stage.run(verdict, support_llm, \"test task\", config)\n\n        assert result.dropped\n        assert \"2/3\" in result.drop_reason\n        assert len(result.deliberation) == 3\n\n    async def test_juror_can_flip_vote(self, support_llm, flip_llm):\n        \"\"\"A juror that starts challenging can flip to support after deliberation.\"\"\"\n        stage = CrossVerificationStage(challengers=[flip_llm])\n        verdict = Verdict(result=\"test result\", confidence=0.9)\n        config = VerdictConfig()\n\n        result = await stage.run(verdict, support_llm, \"test task\", config)\n\n        assert not result.dropped\n        # flip_llm started as challenge but ended as support\n        flip_pos = [p for p in result.deliberation if p.vote == \"challenge\"][0]\n        assert flip_pos.final_vote == \"support\"\n\n    async def test_deliberation_records_all_positions(self, support_llm, challenge_llm):\n        \"\"\"Deliberation list contains one entry per juror.\"\"\"\n        stage = CrossVerificationStage(challengers=[challenge_llm])\n        verdict = Verdict(result=\"test result\", confidence=0.9)\n        config = VerdictConfig()\n\n        result = await stage.run(verdict, support_llm, \"test task\", config)\n\n        assert len(result.deliberation) == 2\n        juror_names = [p.juror for p in result.deliberation]\n        assert len(set(juror_names)) == 2  # unique names\n\n    async def test_confidence_blended_with_vote_ratio(self, support_llm, challenge_llm):\n        \"\"\"Confidence reflects the weighted vote ratio.\"\"\"\n        stage = CrossVerificationStage(challengers=[challenge_llm])\n        verdict = Verdict(result=\"test result\", confidence=0.9)\n        config = VerdictConfig()\n\n        result = await stage.run(verdict, support_llm, \"test task\", config)\n\n        # 1 support (0.9) vs 1 challenge (0.85), ratio ≈ 0.514\n        assert 0.0 < result.confidence < 0.9\n\n    async def test_skips_with_no_challengers(self, support_llm):\n        \"\"\"With no challengers (single juror), stage is a no-op.\"\"\"\n        stage = CrossVerificationStage(challengers=[])\n        verdict = Verdict(result=\"test result\", confidence=0.9)\n        config = VerdictConfig()\n\n        result = await stage.run(verdict, support_llm, \"test task\", config)\n\n        assert result.confidence == 0.9\n        assert len(result.deliberation) == 0\n\n    async def test_parallel_calls(self, mock_llm):\n        \"\"\"Verify each juror makes exactly 2 calls (position + deliberation).\"\"\"\n        juror_a = mock_llm(responses=[\n            {\"vote\": \"support\", \"argument\": \"A\", \"counter_to_self\": \"B\", \"confidence\": 0.8},\n            {\"final_vote\": \"support\", \"rebuttal\": \"C\", \"confidence\": 0.85},\n        ])\n        juror_b = mock_llm(responses=[\n            {\"vote\": \"support\", \"argument\": \"D\", \"counter_to_self\": \"E\", \"confidence\": 0.7},\n            {\"final_vote\": \"support\", \"rebuttal\": \"F\", \"confidence\": 0.75},\n        ])\n        stage = CrossVerificationStage(challengers=[juror_b])\n        verdict = Verdict(result=\"test\", confidence=0.9)\n\n        await stage.run(verdict, juror_a, \"task\", VerdictConfig())\n\n        assert len(juror_a.calls) == 2  # position + deliberation\n        assert len(juror_b.calls) == 2\n",
+            "file_path": "/home/kenan/repositories/agent-verdict/tests/test_stages/test_cross_verification.py"
+          },
+          "timestamp": "2026-03-14T21:22:57.932Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": ".venv/bin/pytest tests/ -v 2>&1",
+            "description": "Run all tests",
+            "timeout": 120000
+          },
+          "timestamp": "2026-03-14T21:23:04.594Z"
+        },
+        {
+          "type": "assistant",
+          "text": "One test failed — both mock providers share the same class name `MockLLMProvider`, so they get the same juror name. I need to disambiguate when names collide.",
+          "timestamp": "2026-03-14T21:23:15.885Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/cross_verification.py",
+            "new_string": "        # Build jury: primary LLM + all challengers (disambiguate duplicate names)\n        jury: list[tuple[str, LLMProvider]] = []\n        seen: dict[str, int] = {}\n        for provider in [llm, *self.challengers]:\n            name = _juror_name(provider)\n            seen[name] = seen.get(name, 0) + 1\n            if seen[name] > 1:\n                name = f\"{name} #{seen[name]}\"\n            jury.append((name, provider))",
+            "old_string": "        # Build jury: primary LLM + all challengers\n        jury: list[tuple[str, LLMProvider]] = [(_juror_name(llm), llm)]\n        for c in self.challengers:\n            jury.append((_juror_name(c), c))",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:23:19.984Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": ".venv/bin/pytest tests/ -v 2>&1 | tail -20",
+            "description": "Run tests"
+          },
+          "timestamp": "2026-03-14T21:23:31.304Z"
+        },
+        {
+          "type": "assistant",
+          "text": "All 83 tests pass. Now update the README with the cross-verification section and push.",
+          "timestamp": "2026-03-14T21:23:44.483Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "limit": 40,
+            "offset": 103
+          },
+          "timestamp": "2026-03-14T21:23:45.230Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "new_string": "| **Logprob Calibration** | Token log-probabilities via `exp(mean_logprob)` | Internally uncertain answers |\n| **Cross-Verification** | Multi-model jury deliberation with position, counter, and rebuttal | Answers that fool one model but not others |\n\nDefault pipeline uses the first 3 (4 LLM calls). Stages 5-7 use different models, breaking the \"same brain grading itself\" problem.",
+            "old_string": "| **Logprob Calibration** | Token log-probabilities via `exp(mean_logprob)` | Internally uncertain answers |\n\nDefault pipeline uses the first 3 (4 LLM calls). Stages 5-7 use different models, breaking the \"same brain grading itself\" problem.",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:23:51.992Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "new_string": "| `LogprobStage` | 1 | OpenAI only |\n| `CrossVerificationStage` | 2 per juror | needs 2+ providers |\n\nCustom pipeline:",
+            "old_string": "| `LogprobStage` | 1 | OpenAI only |\n\nCustom pipeline:",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:24:02.037Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now add a dedicated section explaining cross-verification:",
+          "timestamp": "2026-03-14T21:24:07.732Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "new_string": "## Cross-verification (multi-model jury)\n\nDifferent LLMs deliberate on your agent's answer like a jury. Each juror:\n\n1. **States position** — support or challenge, with argument\n2. **Steel-mans the other side** — strongest counter to their own position\n3. **Deliberates** — sees all positions, writes rebuttal, casts final vote\n\nAll jurors run in parallel. Wall-clock time ≈ one slow LLM call per phase.\n\n```python\nfrom agent_verdict import VerdictPipeline, CrossVerificationStage\nfrom agent_verdict.llm.anthropic import AnthropicProvider\nfrom agent_verdict.llm.openai import OpenAIProvider\nfrom agent_verdict.llm.deepseek import DeepSeekProvider\n\npipeline = VerdictPipeline(\n    llm=AnthropicProvider(),\n    stages=[\n        CrossVerificationStage(challengers=[\n            OpenAIProvider(),\n            DeepSeekProvider(),\n        ]),\n    ],\n)\n\nresult = await pipeline.evaluate(\"the agent's answer\", task_context=\"what it should do\")\n\n# inspect the jury deliberation\nfor juror in result.deliberation:\n    print(f\"{juror.juror}: {juror.vote} → {juror.final_vote} ({juror.confidence:.2f})\")\n    print(f\"  argument: {juror.argument}\")\n    print(f\"  steel-man: {juror.counter_to_self}\")\n    print(f\"  rebuttal: {juror.rebuttal}\")\n```\n\nMajority vote decides. If more jurors challenge than support, the result is dropped.\n\n## Configuration",
+            "old_string": "## Configuration",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:24:16.083Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Also update the MCP tools list and the verdict object section:",
+          "timestamp": "2026-03-14T21:24:39.558Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "new_string": "Tools: `evaluate` (customizable via `stages` param), `check_confidence`, `adversarial_check`, `self_consistency_check`, `semantic_similarity_check`, `entailment_check`, `logprob_check`, `cross_verification`.",
+            "old_string": "Tools: `evaluate` (customizable via `stages` param), `check_confidence`, `adversarial_check`, `self_consistency_check`, `semantic_similarity_check`, `entailment_check`, `logprob_check`.",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:24:41.945Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "new_string": "result.dropped             # was the answer rejected?\nresult.drop_reason         # why it was rejected\nresult.deliberation        # list[JurorPosition] — cross-verification jury\n```",
+            "old_string": "result.dropped             # was the answer rejected?\nresult.drop_reason         # why it was rejected\n```",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:25:49.452Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Run tests one more time, then push:",
+          "timestamp": "2026-03-14T21:25:57.216Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": ".venv/bin/pytest tests/ -q 2>&1",
+            "description": "Quick test run"
+          },
+          "timestamp": "2026-03-14T21:25:57.614Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git add src/agent_verdict/models.py src/agent_verdict/stages/cross_verification.py src/agent_verdict/stages/__init__.py src/agent_verdict/__init__.py src/agent_verdict/mcp_server.py tests/test_stages/test_cross_verification.py README.md && git commit -m \"$(cat <<'EOF'\nAdd CrossVerificationStage — multi-model jury deliberation\n\nMultiple LLMs independently evaluate the result, state positions with\nsteel-manned counter-arguments, then deliberate after seeing all views\nand cast final votes. All jurors run in parallel per phase. Majority\nvote decides whether the result passes or gets dropped.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n)\" && git push",
+            "description": "Commit and push cross-verification"
+          },
+          "timestamp": "2026-03-14T21:26:14.590Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Pushed. Here's what was built:\n\n## CrossVerificationStage — how it works\n\n```\nPhase 1 (parallel):  Each juror independently evaluates\n  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐\n  │ Claude       │  │ GPT-4o      │  │ DeepSeek    │\n  │ vote: support│  │ vote:challenge│ │ vote:support│\n  │ argument: ...│  │ argument: ...│  │ argument: ..│\n  │ steel-man:...│  │ steel-man:...│  │ steel-man:..│\n  └──────┬───────┘  └──────┬───────┘  └──────┬──────┘\n         └────────────┬────┘                  │\n                      ▼ share all positions   │\nPhase 2 (parallel):  Deliberate + final vote  │\n  ┌─────────────┐  ┌─────────────┐  ┌────────┴────┐\n  │ Claude       │  │ GPT-4o      │  │ DeepSeek    │\n  │ final:support│  │ final:support│  │ final:support│\n  │ rebuttal: ...│  │ rebuttal:...│  │ rebuttal: ..│\n  └──────────────┘  └─────────────┘  └─────────────┘\n\nSynthesis: 3/3 support → PASSED (confidence weighted by each juror's confidence)\n```\n\nKey design choices:\n- **All jurors run in parallel** per phase — wall time ≈ slowest single call, not sum\n- **Steel-manning** — each juror must present the best argument *against* their own position (keeps them honest)\n- **Jurors can flip** — after seeing all positions, they can change their vote\n- **Weighted voting** — final confidence factors in each juror's self-reported confidence\n- **Opt-in** — never runs unless you explicitly add it to the pipeline",
+          "timestamp": "2026-03-14T21:26:34.101Z"
+        },
+        {
+          "type": "user",
+          "text": "will that works in mcp as well/",
+          "timestamp": "2026-03-14T21:29:19.193Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Yes, I added a `cross_verification` MCP tool and a `_get_challengers()` helper. But let me verify it actually works properly — the challengers are configured via env var, which is a bit limited. Let me check.",
+          "timestamp": "2026-03-14T21:29:25.568Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Grep",
+          "input": {
+            "output_mode": "content",
+            "path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "pattern": "cross_verification|_get_challengers|CHALLENGER"
+          },
+          "timestamp": "2026-03-14T21:29:26.396Z"
+        },
+        {
+          "type": "assistant",
+          "text": "There's a problem. Two issues:\n\n1. **`cross_verification` is in the `STAGE_REGISTRY`**, but `CrossVerificationStage` needs `challengers` — `_build_stages()` just calls `cls()` with no args, so using it via the `evaluate` tool's `stages` param would create a stage with zero challengers (no-op).\n\n2. **The standalone `cross_verification` tool works**, but relies on `VERDICT_CHALLENGER_PROVIDERS` env var. That works, but the user should also be able to pass challenger names directly as a tool parameter.\n\nLet me fix both:",
+          "timestamp": "2026-03-14T21:29:33.678Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "limit": 50,
+            "offset": 90
+          },
+          "timestamp": "2026-03-14T21:29:34.348Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "offset": 305
+          },
+          "timestamp": "2026-03-14T21:29:36.769Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now let me fix both issues — add `challengers` as a tool parameter, and handle `cross_verification` in `_build_stages`:",
+          "timestamp": "2026-03-14T21:29:42.532Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "def _build_stages(stage_names: list[str]) -> list[Stage]:\n    \"\"\"Build stage instances from a list of stage names.\"\"\"\n    stages = []\n    for name in stage_names:\n        cls = STAGE_REGISTRY.get(name)\n        if cls is None:\n            raise ValueError(\n                f\"Unknown stage '{name}'. \"\n                f\"Available: {', '.join(STAGE_REGISTRY)}\"\n            )\n        if cls is CrossVerificationStage:\n            stages.append(cls(challengers=_get_challengers()))\n        else:\n            stages.append(cls())\n    return stages",
+            "old_string": "def _build_stages(stage_names: list[str]) -> list[Stage]:\n    \"\"\"Build stage instances from a list of stage names.\"\"\"\n    stages = []\n    for name in stage_names:\n        cls = STAGE_REGISTRY.get(name)\n        if cls is None:\n            raise ValueError(\n                f\"Unknown stage '{name}'. \"\n                f\"Available: {', '.join(STAGE_REGISTRY)}\"\n            )\n        stages.append(cls())\n    return stages",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:29:46.270Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now add `challengers` as a direct parameter to the MCP tool so it doesn't only rely on env vars:",
+          "timestamp": "2026-03-14T21:30:55.022Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "@mcp.tool(\n    name=\"cross_verification\",\n    description=(\n        \"Multi-model jury deliberation: multiple LLMs independently evaluate the \"\n        \"agent's result, then see each other's positions and cast a final vote. \"\n        \"Each juror argues for/against, steel-mans the opposing view, and rebuts \"\n        \"after deliberation. Majority vote decides. \"\n        \"Pass 'challengers' (e.g. ['openai', 'deepseek']) to pick the jury, \"\n        \"or set VERDICT_CHALLENGER_PROVIDERS env var.\"\n    ),\n)\nasync def cross_verification(\n    result: str,\n    task_context: str,\n    challengers: list[str] | None = None,\n    confidence_threshold: float = 0.5,\n) -> str:\n    from .models import Verdict\n\n    config = VerdictConfig(confidence_threshold=confidence_threshold)\n    primary = _get_provider()\n    challenger_providers = _get_challengers(challengers)\n    stage = CrossVerificationStage(challengers=challenger_providers)\n    verdict = Verdict(result=result, confidence=1.0)\n    verdict = await stage.run(verdict, primary, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)",
+            "old_string": "@mcp.tool(\n    name=\"cross_verification\",\n    description=(\n        \"Multi-model jury deliberation: multiple LLMs independently evaluate the \"\n        \"agent's result, then see each other's positions and cast a final vote. \"\n        \"Each juror argues for/against, steel-mans the opposing view, and rebuts \"\n        \"after deliberation. Majority vote decides. Set VERDICT_CHALLENGER_PROVIDERS \"\n        \"env var (comma-separated, e.g. 'openai,deepseek') to pick the jury.\"\n    ),\n)\nasync def cross_verification(\n    result: str,\n    task_context: str,\n    confidence_threshold: float = 0.5,\n) -> str:\n    from .models import Verdict\n\n    config = VerdictConfig(confidence_threshold=confidence_threshold)\n    primary = _get_provider()\n    challengers = _get_challengers()\n    stage = CrossVerificationStage(challengers=challengers)\n    verdict = Verdict(result=result, confidence=1.0)\n    verdict = await stage.run(verdict, primary, task_context, config)\n    return json.dumps(_verdict_to_dict(verdict), indent=2)",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:31:02.966Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update `_get_challengers` to accept an optional list parameter:",
+          "timestamp": "2026-03-14T21:31:06.813Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "def _get_challengers(names: list[str] | None = None):\n    \"\"\"Build challenger providers from names list or VERDICT_CHALLENGER_PROVIDERS env var.\"\"\"\n    if names is None:\n        raw = os.environ.get(\"VERDICT_CHALLENGER_PROVIDERS\", \"\")\n        names = [n.strip() for n in raw.split(\",\") if n.strip()] if raw else []\n    if not names:\n        return []\n    challengers = []\n    for name in names:\n        name = name.strip().lower()\n        try:\n            if name == \"anthropic\":\n                from .llm.anthropic import AnthropicProvider\n                challengers.append(AnthropicProvider())\n            elif name == \"openai\":\n                from .llm.openai import OpenAIProvider\n                challengers.append(OpenAIProvider())\n            elif name == \"deepseek\":\n                from .llm.deepseek import DeepSeekProvider\n                challengers.append(DeepSeekProvider())\n            elif name == \"kimi\":\n                from .llm.kimi import KimiProvider\n                challengers.append(KimiProvider())\n        except (ImportError, RuntimeError):\n            pass  # skip unavailable providers\n    return challengers",
+            "old_string": "def _get_challengers():\n    \"\"\"Build challenger providers from VERDICT_CHALLENGER_PROVIDERS env var.\"\"\"\n    raw = os.environ.get(\"VERDICT_CHALLENGER_PROVIDERS\", \"\")\n    if not raw:\n        return []\n    challengers = []\n    for name in raw.split(\",\"):\n        name = name.strip().lower()\n        try:\n            if name == \"anthropic\":\n                from .llm.anthropic import AnthropicProvider\n                challengers.append(AnthropicProvider())\n            elif name == \"openai\":\n                from .llm.openai import OpenAIProvider\n                challengers.append(OpenAIProvider())\n            elif name == \"deepseek\":\n                from .llm.deepseek import DeepSeekProvider\n                challengers.append(DeepSeekProvider())\n            elif name == \"kimi\":\n                from .llm.kimi import KimiProvider\n                challengers.append(KimiProvider())\n        except (ImportError, RuntimeError):\n            pass  # skip unavailable providers\n    return challengers",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:31:12.630Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Also update the `evaluate` tool description to mention `cross_verification` as an available stage:",
+          "timestamp": "2026-03-14T21:31:27.197Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/mcp_server.py",
+            "new_string": "        \"Available stages: confidence, verification, adversarial, \"\n        \"self_consistency, semantic_similarity, entailment, logprob, cross_verification. \"",
+            "old_string": "        \"Available stages: confidence, verification, adversarial, \"\n        \"self_consistency, semantic_similarity, entailment, logprob. \"",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:31:29.483Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": ".venv/bin/pytest tests/ -q 2>&1",
+            "description": "Quick test run"
+          },
+          "timestamp": "2026-03-14T21:31:36.916Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git add src/agent_verdict/mcp_server.py && git commit -m \"$(cat <<'EOF'\nFix cross-verification MCP tool: add challengers param and handle in evaluate\n\nThe cross_verification tool now accepts a challengers list param\n(e.g. [\"openai\", \"deepseek\"]) so it doesn't only rely on env vars.\nThe evaluate tool's stages param also correctly wires up challengers\nwhen cross_verification is included.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n)\" && git push",
+            "description": "Commit and push MCP fix"
+          },
+          "timestamp": "2026-03-14T21:31:45.545Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Yes, cross-verification now works in MCP in two ways:\n\n1. **Direct tool call** with `challengers` param:\n   ```\n   cross_verification(result=\"...\", task_context=\"...\", challengers=[\"openai\", \"deepseek\"])\n   ```\n\n2. **Via `evaluate` tool** with stages param:\n   ```\n   evaluate(result=\"...\", task_context=\"...\", stages=[\"confidence\", \"cross_verification\"])\n   ```\n   (reads challengers from `VERDICT_CHALLENGER_PROVIDERS` env var)\n\n---\n\nNow to your question about **multi-language support** — there are a few realistic paths:\n\n**1. REST API server (easiest, any language)**\nAdd a thin HTTP server (FastAPI) that wraps the pipeline. Any language calls it over HTTP. This is the fastest path to \"works everywhere.\"\n\n**2. Official SDKs (TypeScript/JS first)**\nPort the core logic to TypeScript. JS/TS is the biggest AI agent ecosystem (LangChain.js, Vercel AI SDK, etc). The architecture is clean enough — models, pipeline, stages — that it ports well.\n\n**3. OpenAPI spec + codegen**\nBuild the REST API with an OpenAPI spec, then auto-generate client SDKs for Go, Ruby, Java, etc.\n\n**4. WASM module**\nCompile a Rust/Go core to WASM — runs in any language runtime. Overkill for now.\n\nMy recommendation: **start with a REST API** — it's 1-2 files of work and instantly makes agent-verdict usable from any language. Then do a proper **TypeScript SDK** since that's where the AI agent ecosystem is biggest. Want me to implement the REST API?",
+          "timestamp": "2026-03-14T21:32:04.887Z"
+        },
+        {
+          "type": "user",
+          "text": "no need, push changes",
+          "timestamp": "2026-03-14T21:32:26.657Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Already pushed — the last commit `2b24902` is on `main`. All changes from this session are live:\n\n- `7517602` — Multi-provider support (DeepSeek, Kimi, any OpenAI-compatible API)\n- `cb7f7eb` — CrossVerificationStage (multi-model jury deliberation)\n- `2b24902` — MCP cross-verification fix (challengers param + evaluate integration)",
+          "timestamp": "2026-03-14T21:32:34.268Z"
+        },
+        {
+          "type": "user",
+          "text": "what's your opinion about that project? is it unique? or what could make it unique",
+          "timestamp": "2026-03-14T21:32:44.308Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Updated take after working deeper in the codebase:\n\n## Where it stands now\n\nThe cross-verification stage genuinely sets it apart. I'm not aware of another eval library that lets you pit Claude against GPT against DeepSeek in a structured deliberation with steel-manning and rebuttals. Most tools do \"LLM-as-judge\" with a single model — that's a solved, commoditized pattern.\n\nThe architecture is also unusually clean for this space. One ABC for providers, one ABC for stages, a pipeline that chains them with early exit. Compare that to Guardrails AI or DeepEval which are sprawling frameworks. This is more like a sharp tool than a platform.\n\n## What's still not unique enough\n\n**The name doesn't communicate the differentiator.** \"agent-verdict\" sounds like another generic eval tool. Nobody discovers it and immediately thinks \"oh, multi-model jury deliberation.\" The cross-verification story should be front and center — it's the thing nobody else does.\n\n**No real-world proof.** The README shows synthetic examples. A user looking at this thinks \"neat idea, but does it actually catch things a single LLM judge misses?\" A concrete case study — \"GPT-4o passed this hallucination, but when DeepSeek cross-verified, it caught it\" — would be more convincing than any feature list.\n\n## What would make it genuinely hard to compete with\n\n**1. Publish benchmark results.** Run cross-verification vs single-model judging on a hallucination dataset (HaluEval, TruthfulQA). If multi-model catches 30% more hallucinations, that's a paper-worthy result and an inarguable selling point.\n\n**2. Verdict memory.** Track verdicts over time. \"Your agent's confidence has been declining on security tasks this week.\" \"This type of answer gets challenged by DeepSeek 80% of the time.\" Nobody does longitudinal eval tracking.\n\n**3. The feedback loop.** Right now verdict is a filter — pass or drop. Make it a loop: if dropped, feed the counter-arguments back to the agent and let it retry. Agent → verdict → dropped → agent retries with jury feedback → verdict → passed. That turns agent-verdict from a quality gate into an agent improvement engine.\n\n**4. Cost dashboard.** Every eval tool burns tokens but none show you the bill. \"This pipeline costs $0.03/eval, here's cost per stage, here's what you'd save by dropping self-consistency.\" Developers care about this deeply and nobody surfaces it.\n\nThe strongest moat is **#1 + cross-verification**. If you can show empirically that a 3-model jury catches hallucinations that single-model judging misses, that's not just a feature — it's a research contribution. Everything else in the eval space is \"trust me, LLM-as-judge works.\" You'd be the first to prove that *multi-model deliberation* works better, with numbers.",
+          "timestamp": "2026-03-14T21:33:09.150Z"
+        },
+        {
+          "type": "user",
+          "text": "lets add  4. Cost dashboard. Every eval tool burns tokens but none show you the bill. \"This pipeline costs\n  $0.03/eval, here's cost per stage, here's what you'd save by dropping self-consistency.\" Developers care\n  about this deeply and nobody surfaces it.",
+          "timestamp": "2026-03-14T21:34:07.097Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Good one. Let me design this cleanly.\n\n**Approach:** Track tokens on each provider (no stage interface changes needed), pipeline reads between stages, pricing is a simple lookup table.",
+          "timestamp": "2026-03-14T21:34:53.073Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/models.py"
+          },
+          "timestamp": "2026-03-14T21:34:53.951Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/base.py"
+          },
+          "timestamp": "2026-03-14T21:34:54.341Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/openai.py"
+          },
+          "timestamp": "2026-03-14T21:34:54.793Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/anthropic.py"
+          },
+          "timestamp": "2026-03-14T21:34:55.255Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/pipeline.py"
+          },
+          "timestamp": "2026-03-14T21:34:55.763Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/cli.py"
+          },
+          "timestamp": "2026-03-14T21:34:55.769Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now I also need to read the cross-verification stage to handle challenger usage tracking:",
+          "timestamp": "2026-03-14T21:34:58.825Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/stages/cross_verification.py"
+          },
+          "timestamp": "2026-03-14T21:34:59.569Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Good. Now I have the full picture. Let me implement cost tracking across all layers.",
+          "timestamp": "2026-03-14T21:35:03.270Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/models.py",
+            "new_string": "class LLMResponse(BaseModel):\n    content: str\n    input_tokens: int = 0\n    output_tokens: int = 0",
+            "old_string": "class LLMResponse(BaseModel):\n    content: str",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:35:04.697Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now add `StageUsage` and `usage` field to `Verdict`:",
+          "timestamp": "2026-03-14T21:35:25.842Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/models.py",
+            "new_string": "class StageUsage(BaseModel):\n    \"\"\"Token usage and cost for a single pipeline stage.\"\"\"\n    stage: str = \"\"\n    input_tokens: int = 0\n    output_tokens: int = 0\n    total_tokens: int = 0\n    llm_calls: int = 0\n    cost: float = 0.0  # USD\n\n\nclass Verdict(BaseModel):\n    result: Any = None\n    justification: str = \"\"\n    confidence: float = Field(default=0.0, ge=0.0, le=1.0)\n    confidence_reason: str = \"\"\n    context_relevance: float = Field(default=0.0, ge=0.0, le=1.0)\n    counter_argument: str = \"\"\n    defense: str = \"\"\n    defended: bool = False\n    dropped: bool = False\n    drop_reason: str = \"\"\n    deliberation: list[JurorPosition] = Field(default_factory=list)\n    usage: list[StageUsage] = Field(default_factory=list)\n\n    @property\n    def total_tokens(self) -> int:\n        return sum(u.total_tokens for u in self.usage)\n\n    @property\n    def total_cost(self) -> float:\n        return sum(u.cost for u in self.usage)",
+            "old_string": "class Verdict(BaseModel):\n    result: Any = None\n    justification: str = \"\"\n    confidence: float = Field(default=0.0, ge=0.0, le=1.0)\n    confidence_reason: str = \"\"\n    context_relevance: float = Field(default=0.0, ge=0.0, le=1.0)\n    counter_argument: str = \"\"\n    defense: str = \"\"\n    defended: bool = False\n    dropped: bool = False\n    drop_reason: str = \"\"\n    deliberation: list[JurorPosition] = Field(default_factory=list)",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:35:31.516Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now add usage tracking to `LLMProvider` base class:",
+          "timestamp": "2026-03-14T21:37:02.647Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/base.py",
+            "new_string": "# Default pricing per 1M tokens: (input_usd, output_usd)\nMODEL_PRICING: dict[str, tuple[float, float]] = {\n    \"gpt-4o\": (2.50, 10.00),\n    \"gpt-4o-mini\": (0.15, 0.60),\n    \"gpt-4.1\": (2.00, 8.00),\n    \"gpt-4.1-mini\": (0.40, 1.60),\n    \"gpt-4.1-nano\": (0.10, 0.40),\n    \"o3\": (2.00, 8.00),\n    \"o3-mini\": (1.10, 4.40),\n    \"o4-mini\": (1.10, 4.40),\n    \"claude-sonnet-4-6\": (3.00, 15.00),\n    \"claude-opus-4-6\": (15.00, 75.00),\n    \"claude-haiku-4-5\": (0.80, 4.00),\n    \"deepseek-chat\": (0.27, 1.10),\n    \"deepseek-reasoner\": (0.55, 2.19),\n    \"kimi-k2.5\": (0.50, 2.80),\n}\n\n\ndef _estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:\n    \"\"\"Estimate cost in USD from token counts and model pricing.\"\"\"\n    # Try exact match, then prefix match\n    pricing = MODEL_PRICING.get(model)\n    if not pricing:\n        for key, val in MODEL_PRICING.items():\n            if model.startswith(key):\n                pricing = val\n                break\n    if not pricing:\n        return 0.0\n    input_price, output_price = pricing\n    return (input_tokens * input_price + output_tokens * output_price) / 1_000_000\n\n\nclass LLMProvider(ABC):\n    @abstractmethod\n    async def complete(self, messages: list[LLMMessage]) -> LLMResponse:\n        ...\n\n    async def complete_structured(\n        self,\n        messages: list[LLMMessage],\n        schema: Type[BaseModel],\n    ) -> dict[str, Any]:\n        \"\"\"Request structured output matching the given Pydantic schema.\n\n        Providers should override this to use native structured output\n        (Anthropic tool_use, OpenAI json_schema). The default falls back\n        to plain complete() + JSON parsing.\n        \"\"\"\n        from agent_verdict.stages.base import parse_llm_json\n\n        response = await self.complete(messages)\n        return parse_llm_json(response.content, {})\n\n    def _track_usage(self, input_tokens: int, output_tokens: int) -> None:\n        \"\"\"Accumulate token usage for cost tracking.\"\"\"\n        if not hasattr(self, \"_usage\"):\n            self._usage = {\"input_tokens\": 0, \"output_tokens\": 0, \"calls\": 0}\n        self._usage[\"input_tokens\"] += input_tokens\n        self._usage[\"output_tokens\"] += output_tokens\n        self._usage[\"calls\"] += 1\n\n    def get_usage(self) -> dict[str, int]:\n        \"\"\"Return accumulated token usage since last reset.\"\"\"\n        return getattr(self, \"_usage\", {\"input_tokens\": 0, \"output_tokens\": 0, \"calls\": 0}).copy()\n\n    def reset_usage(self) -> None:\n        \"\"\"Reset accumulated token usage.\"\"\"\n        self._usage = {\"input_tokens\": 0, \"output_tokens\": 0, \"calls\": 0}\n\n    def estimate_cost(self) -> float:\n        \"\"\"Estimate accumulated cost in USD.\"\"\"\n        model = getattr(self, \"model\", \"\")\n        usage = self.get_usage()\n        return _estimate_cost(model, usage[\"input_tokens\"], usage[\"output_tokens\"])\n\n    def complete_sync(self, messages: list[LLMMessage]) -> LLMResponse:\n        import asyncio\n\n        try:\n            loop = asyncio.get_running_loop()\n        except RuntimeError:\n            loop = None\n\n        if loop and loop.is_running():\n            import concurrent.futures\n\n            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:\n                return pool.submit(asyncio.run, self.complete(messages)).result()\n        return asyncio.run(self.complete(messages))",
+            "old_string": "class LLMProvider(ABC):\n    @abstractmethod\n    async def complete(self, messages: list[LLMMessage]) -> LLMResponse:\n        ...\n\n    async def complete_structured(\n        self,\n        messages: list[LLMMessage],\n        schema: Type[BaseModel],\n    ) -> dict[str, Any]:\n        \"\"\"Request structured output matching the given Pydantic schema.\n\n        Providers should override this to use native structured output\n        (Anthropic tool_use, OpenAI json_schema). The default falls back\n        to plain complete() + JSON parsing.\n        \"\"\"\n        from agent_verdict.stages.base import parse_llm_json\n\n        response = await self.complete(messages)\n        return parse_llm_json(response.content, {})\n\n    def complete_sync(self, messages: list[LLMMessage]) -> LLMResponse:\n        import asyncio\n\n        try:\n            loop = asyncio.get_running_loop()\n        except RuntimeError:\n            loop = None\n\n        if loop and loop.is_running():\n            import concurrent.futures\n\n            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:\n                return pool.submit(asyncio.run, self.complete(messages)).result()\n        return asyncio.run(self.complete(messages))",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:37:20.466Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update OpenAI provider to capture token usage:",
+          "timestamp": "2026-03-14T21:37:31.156Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/openai.py",
+            "new_string": "    async def complete(self, messages: list[LLMMessage]) -> LLMResponse:\n        response = await self.client.chat.completions.create(\n            model=self.model,\n            max_tokens=self.max_tokens,\n            messages=[{\"role\": m.role, \"content\": m.content} for m in messages],\n        )\n        input_tokens = getattr(response.usage, \"prompt_tokens\", 0) or 0\n        output_tokens = getattr(response.usage, \"completion_tokens\", 0) or 0\n        self._track_usage(input_tokens, output_tokens)\n        return LLMResponse(\n            content=response.choices[0].message.content or \"\",\n            input_tokens=input_tokens,\n            output_tokens=output_tokens,\n        )",
+            "old_string": "    async def complete(self, messages: list[LLMMessage]) -> LLMResponse:\n        response = await self.client.chat.completions.create(\n            model=self.model,\n            max_tokens=self.max_tokens,\n            messages=[{\"role\": m.role, \"content\": m.content} for m in messages],\n        )\n        return LLMResponse(content=response.choices[0].message.content or \"\")",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:37:34.756Z"
+        },
+        {
+          "type": "user",
+          "text": "[Request interrupted by user]",
+          "timestamp": "2026-03-14T21:40:04.125Z"
+        },
+        {
+          "type": "user",
+          "text": "co",
+          "timestamp": "2026-03-14T21:40:04.166Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Continuing. Need to update the OpenAI `complete_structured`, Anthropic provider, pipeline, CLI, and cross-verification stage.",
+          "timestamp": "2026-03-14T21:40:08.209Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/openai.py",
+            "new_string": "        input_tokens = getattr(response.usage, \"prompt_tokens\", 0) or 0\n        output_tokens = getattr(response.usage, \"completion_tokens\", 0) or 0\n        self._track_usage(input_tokens, output_tokens)\n        content = response.choices[0].message.content or \"{}\"\n        return json.loads(content)",
+            "old_string": "        content = response.choices[0].message.content or \"{}\"\n        return json.loads(content)",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:40:09.799Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/anthropic.py",
+            "new_string": "    async def complete(self, messages: list[LLMMessage]) -> LLMResponse:\n        response = await self.client.messages.create(\n            model=self.model,\n            max_tokens=self.max_tokens,\n            messages=[{\"role\": m.role, \"content\": m.content} for m in messages],\n        )\n        input_tokens = getattr(response.usage, \"input_tokens\", 0) or 0\n        output_tokens = getattr(response.usage, \"output_tokens\", 0) or 0\n        self._track_usage(input_tokens, output_tokens)\n        return LLMResponse(\n            content=response.content[0].text,\n            input_tokens=input_tokens,\n            output_tokens=output_tokens,\n        )",
+            "old_string": "    async def complete(self, messages: list[LLMMessage]) -> LLMResponse:\n        response = await self.client.messages.create(\n            model=self.model,\n            max_tokens=self.max_tokens,\n            messages=[{\"role\": m.role, \"content\": m.content} for m in messages],\n        )\n        return LLMResponse(content=response.content[0].text)",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:40:15.997Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/llm/anthropic.py",
+            "new_string": "        input_tokens = getattr(response.usage, \"input_tokens\", 0) or 0\n        output_tokens = getattr(response.usage, \"output_tokens\", 0) or 0\n        self._track_usage(input_tokens, output_tokens)\n\n        for block in response.content:\n            if block.type == \"tool_use\":\n                return block.input\n\n        # Fallback: shouldn't happen with tool_choice forced, but just in case\n        return {}",
+            "old_string": "        for block in response.content:\n            if block.type == \"tool_use\":\n                return block.input\n\n        # Fallback: shouldn't happen with tool_choice forced, but just in case\n        return {}",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:40:40.010Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the pipeline to track usage per stage:",
+          "timestamp": "2026-03-14T21:41:12.988Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/pipeline.py",
+            "new_string": "from .llm.base import LLMProvider, _estimate_cost\nfrom .models import StageUsage, Verdict, VerdictConfig\nfrom .stages import AdversarialStage, ConfidenceStage, Stage, VerificationStage",
+            "old_string": "from .llm.base import LLMProvider\nfrom .models import Verdict, VerdictConfig\nfrom .stages import AdversarialStage, ConfidenceStage, Stage, VerificationStage",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:41:15.341Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/pipeline.py",
+            "new_string": "    async def evaluate(\n        self,\n        result: Any,\n        task_context: str = \"\",\n    ) -> Verdict:\n        verdict = Verdict(result=result)\n        all_usage: list[StageUsage] = []\n\n        for stage in self.stages:\n            if verdict.dropped:\n                break\n            self.llm.reset_usage()\n            verdict = await stage.run(verdict, self.llm, task_context, self.config)\n\n            # Collect usage from primary LLM\n            usage = self.llm.get_usage()\n            model = getattr(self.llm, \"model\", \"\")\n\n            # For CrossVerificationStage, also collect challenger usage\n            challengers = getattr(stage, \"challengers\", None)\n            if challengers:\n                for challenger in challengers:\n                    c_usage = challenger.get_usage()\n                    c_model = getattr(challenger, \"model\", \"\")\n                    usage[\"input_tokens\"] += c_usage[\"input_tokens\"]\n                    usage[\"output_tokens\"] += c_usage[\"output_tokens\"]\n                    usage[\"calls\"] += c_usage[\"calls\"]\n                    # Use challenger model for cost if primary has no tokens\n                    if c_usage[\"input_tokens\"] > 0 and not model:\n                        model = c_model\n\n            input_t = usage[\"input_tokens\"]\n            output_t = usage[\"output_tokens\"]\n            cost = _estimate_cost(model, input_t, output_t)\n\n            # Also estimate cost per challenger model separately\n            if challengers:\n                cost = _estimate_cost(\n                    getattr(self.llm, \"model\", \"\"),\n                    self.llm.get_usage()[\"input_tokens\"],\n                    self.llm.get_usage()[\"output_tokens\"],\n                )\n                for challenger in challengers:\n                    c_usage = challenger.get_usage()\n                    c_model = getattr(challenger, \"model\", \"\")\n                    cost += _estimate_cost(c_model, c_usage[\"input_tokens\"], c_usage[\"output_tokens\"])\n\n            all_usage.append(StageUsage(\n                stage=type(stage).__name__,\n                input_tokens=input_t,\n                output_tokens=output_t,\n                total_tokens=input_t + output_t,\n                llm_calls=usage[\"calls\"],\n                cost=round(cost, 6),\n            ))\n\n        verdict = verdict.model_copy(update={\"usage\": all_usage})\n        return verdict",
+            "old_string": "    async def evaluate(\n        self,\n        result: Any,\n        task_context: str = \"\",\n    ) -> Verdict:\n        verdict = Verdict(result=result)\n        for stage in self.stages:\n            if verdict.dropped:\n                break\n            verdict = await stage.run(verdict, self.llm, task_context, self.config)\n        return verdict",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:41:33.865Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update the CLI to display cost:",
+          "timestamp": "2026-03-14T21:41:54.692Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/cli.py",
+            "new_string": "    if verbose and v.confidence_reason:\n        print()\n        print(f\"  {_color('confidence reason:', DIM)} {v.confidence_reason}\")\n\n    # cost breakdown\n    if v.usage:\n        print(f\"  {_color('cost:', DIM)}\")\n        for u in v.usage:\n            cost_str = f\"${u.cost:.4f}\" if u.cost > 0 else \"n/a\"\n            tokens_str = f\"{u.total_tokens:,} tokens\" if u.total_tokens > 0 else \"no data\"\n            print(f\"    {_color(u.stage, CYAN):32s} {u.llm_calls} calls  {tokens_str:>16s}  {_color(cost_str, YELLOW)}\")\n        total = v.total_cost\n        total_tokens = v.total_tokens\n        if total > 0:\n            print(f\"    {'':32s} {_color(f'total: ${total:.4f}', BOLD)}  ({total_tokens:,} tokens)\")\n\n    print()",
+            "old_string": "    if verbose and v.confidence_reason:\n        print()\n        print(f\"  {_color('confidence reason:', DIM)} {v.confidence_reason}\")\n\n    print()",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:42:00.710Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now update exports in `__init__.py`:",
+          "timestamp": "2026-03-14T21:42:05.785Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/__init__.py"
+          },
+          "timestamp": "2026-03-14T21:42:06.022Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/__init__.py",
+            "new_string": "from .models import LLMMessage, LLMResponse, StageUsage, Verdict, VerdictConfig",
+            "old_string": "from .models import LLMMessage, LLMResponse, Verdict, VerdictConfig",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:42:09.452Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/src/agent_verdict/__init__.py",
+            "new_string": "    \"StageUsage\",\n    \"SelfConsistencyStage\",",
+            "old_string": "    \"SelfConsistencyStage\",",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:42:16.754Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now run tests:",
+          "timestamp": "2026-03-14T21:42:43.361Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": ".venv/bin/pytest tests/ -v 2>&1",
+            "description": "Run all tests",
+            "timeout": 120000
+          },
+          "timestamp": "2026-03-14T21:42:44.244Z"
+        },
+        {
+          "type": "assistant",
+          "text": "All 83 pass. Now let me add tests for the cost tracking and update the README.",
+          "timestamp": "2026-03-14T21:42:49.352Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "input": {
+            "content": "from __future__ import annotations\n\nimport json\nfrom typing import Any, Type\n\nimport pytest\nfrom pydantic import BaseModel\n\nfrom agent_verdict import LLMMessage, LLMProvider, LLMResponse, VerdictConfig, VerdictPipeline\nfrom agent_verdict.llm.base import MODEL_PRICING, _estimate_cost\nfrom agent_verdict.models import StageUsage\nfrom agent_verdict.stages import ConfidenceStage, VerificationStage\n\n\nclass MockLLMWithUsage(LLMProvider):\n    \"\"\"Mock provider that simulates token usage.\"\"\"\n\n    def __init__(self, model: str, responses: list[dict[str, Any]]):\n        self.model = model\n        self._responses = responses\n        self._call_index = 0\n\n    async def complete(self, messages: list[LLMMessage]) -> LLMResponse:\n        if self._call_index < len(self._responses):\n            data = self._responses[self._call_index]\n            self._call_index += 1\n            # Simulate token usage\n            self._track_usage(150, 50)\n            return LLMResponse(\n                content=json.dumps(data),\n                input_tokens=150,\n                output_tokens=50,\n            )\n        return LLMResponse(content=\"{}\")\n\n    async def complete_structured(\n        self,\n        messages: list[LLMMessage],\n        schema: Type[BaseModel],\n    ) -> dict[str, Any]:\n        if self._call_index < len(self._responses):\n            data = self._responses[self._call_index]\n            self._call_index += 1\n            self._track_usage(150, 50)\n            return data\n        return {}\n\n\nclass TestEstimateCost:\n    def test_known_model(self):\n        cost = _estimate_cost(\"gpt-4o\", 1_000_000, 1_000_000)\n        assert cost == 2.50 + 10.00\n\n    def test_prefix_match(self):\n        cost = _estimate_cost(\"gpt-4o-2024-08-06\", 1_000_000, 0)\n        assert cost == 2.50\n\n    def test_unknown_model(self):\n        cost = _estimate_cost(\"unknown-model\", 1_000_000, 1_000_000)\n        assert cost == 0.0\n\n    def test_zero_tokens(self):\n        cost = _estimate_cost(\"gpt-4o\", 0, 0)\n        assert cost == 0.0\n\n    def test_small_tokens(self):\n        # 1000 input tokens of gpt-4o = $0.0025\n        cost = _estimate_cost(\"gpt-4o\", 1000, 0)\n        assert abs(cost - 0.0025) < 1e-8\n\n\nclass TestProviderUsageTracking:\n    def test_tracks_cumulative_usage(self):\n        llm = MockLLMWithUsage(\"gpt-4o\", [{\"a\": 1}, {\"b\": 2}])\n        # Simulate tracking\n        llm._track_usage(100, 50)\n        llm._track_usage(200, 75)\n        usage = llm.get_usage()\n        assert usage[\"input_tokens\"] == 300\n        assert usage[\"output_tokens\"] == 125\n        assert usage[\"calls\"] == 2\n\n    def test_reset_usage(self):\n        llm = MockLLMWithUsage(\"gpt-4o\", [])\n        llm._track_usage(100, 50)\n        llm.reset_usage()\n        usage = llm.get_usage()\n        assert usage[\"input_tokens\"] == 0\n        assert usage[\"output_tokens\"] == 0\n        assert usage[\"calls\"] == 0\n\n    def test_estimate_cost_method(self):\n        llm = MockLLMWithUsage(\"gpt-4o\", [])\n        llm._track_usage(1_000_000, 500_000)\n        cost = llm.estimate_cost()\n        assert cost == 2.50 + 5.00\n\n\nclass TestPipelineUsageTracking:\n    async def test_pipeline_records_usage_per_stage(self):\n        llm = MockLLMWithUsage(\"gpt-4o\", [\n            # ConfidenceStage response\n            {\n                \"confidence\": 0.9,\n                \"confidence_reason\": \"Strong\",\n                \"context_relevance\": 0.85,\n                \"justification\": \"Good\",\n            },\n            # VerificationStage response\n            {\n                \"verified\": True,\n                \"verification_reason\": \"Confirmed\",\n                \"adjusted_confidence\": 0.88,\n            },\n        ])\n        pipeline = VerdictPipeline(\n            llm=llm,\n            stages=[ConfidenceStage(), VerificationStage()],\n        )\n        verdict = await pipeline.evaluate(\"test result\", task_context=\"test task\")\n\n        assert len(verdict.usage) == 2\n        assert verdict.usage[0].stage == \"ConfidenceStage\"\n        assert verdict.usage[0].llm_calls == 1\n        assert verdict.usage[0].input_tokens == 150\n        assert verdict.usage[0].output_tokens == 50\n        assert verdict.usage[0].total_tokens == 200\n\n        assert verdict.usage[1].stage == \"VerificationStage\"\n        assert verdict.usage[1].llm_calls == 1\n\n    async def test_total_cost_property(self):\n        llm = MockLLMWithUsage(\"gpt-4o\", [\n            {\n                \"confidence\": 0.9,\n                \"confidence_reason\": \"Strong\",\n                \"context_relevance\": 0.85,\n                \"justification\": \"Good\",\n            },\n        ])\n        pipeline = VerdictPipeline(\n            llm=llm,\n            stages=[ConfidenceStage()],\n        )\n        verdict = await pipeline.evaluate(\"test\", task_context=\"task\")\n\n        assert verdict.total_tokens == 200\n        assert verdict.total_cost > 0\n\n    async def test_early_exit_only_tracks_run_stages(self):\n        llm = MockLLMWithUsage(\"gpt-4o\", [\n            # Low confidence → drops, verification never runs\n            {\n                \"confidence\": 0.1,\n                \"confidence_reason\": \"Weak\",\n                \"context_relevance\": 0.1,\n                \"justification\": \"Bad\",\n            },\n        ])\n        pipeline = VerdictPipeline(\n            llm=llm,\n            stages=[ConfidenceStage(), VerificationStage()],\n        )\n        verdict = await pipeline.evaluate(\"bad result\", task_context=\"task\")\n\n        assert verdict.dropped\n        assert len(verdict.usage) == 1  # only confidence ran\n        assert verdict.usage[0].stage == \"ConfidenceStage\"\n\n    async def test_usage_in_json_output(self):\n        llm = MockLLMWithUsage(\"gpt-4o\", [\n            {\n                \"confidence\": 0.9,\n                \"confidence_reason\": \"Strong\",\n                \"context_relevance\": 0.85,\n                \"justification\": \"Good\",\n            },\n        ])\n        pipeline = VerdictPipeline(\n            llm=llm,\n            stages=[ConfidenceStage()],\n        )\n        verdict = await pipeline.evaluate(\"test\", task_context=\"task\")\n        data = verdict.model_dump()\n\n        assert \"usage\" in data\n        assert len(data[\"usage\"]) == 1\n        assert data[\"usage\"][0][\"stage\"] == \"ConfidenceStage\"\n        assert data[\"usage\"][0][\"total_tokens\"] == 200\n        assert data[\"usage\"][0][\"cost\"] > 0\n",
+            "file_path": "/home/kenan/repositories/agent-verdict/tests/test_cost_tracking.py"
+          },
+          "timestamp": "2026-03-14T21:43:13.580Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": ".venv/bin/pytest tests/ -v 2>&1",
+            "description": "Run all tests",
+            "timeout": 120000
+          },
+          "timestamp": "2026-03-14T21:43:18.208Z"
+        },
+        {
+          "type": "assistant",
+          "text": "95 tests, all passing. Now update the README:",
+          "timestamp": "2026-03-14T21:43:23.332Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "limit": 30,
+            "offset": 138
+          },
+          "timestamp": "2026-03-14T21:43:24.421Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "new_string": "result.deliberation        # list[JurorPosition] — cross-verification jury\nresult.usage               # list[StageUsage] — per-stage token/cost breakdown\nresult.total_tokens        # sum of all tokens across stages\nresult.total_cost          # sum of all costs in USD\n```",
+            "old_string": "result.deliberation        # list[JurorPosition] — cross-verification jury\n```",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:43:29.563Z"
+        },
+        {
+          "type": "assistant",
+          "text": "Now add a cost tracking section to the README:",
+          "timestamp": "2026-03-14T21:43:32.186Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "offset": 216
+          },
+          "timestamp": "2026-03-14T21:43:32.791Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "input": {
+            "file_path": "/home/kenan/repositories/agent-verdict/README.md",
+            "new_string": "## Cost tracking\n\nEvery evaluation tracks token usage and estimated cost per stage — no surprises.\n\n```python\nresult = await pipeline.evaluate(\"answer\", task_context=\"task\")\n\nfor stage in result.usage:\n    print(f\"{stage.stage}: {stage.llm_calls} calls, {stage.total_tokens:,} tokens, ${stage.cost:.4f}\")\n\nprint(f\"Total: {result.total_tokens:,} tokens, ${result.total_cost:.4f}\")\n```\n\nCLI output includes cost breakdown automatically:\n\n```\n  PASSED\n\n  confidence:   0.87\n  relevance:    0.82\n  cost:\n    ConfidenceStage              1 calls       423 tokens  $0.0016\n    VerificationStage            1 calls       512 tokens  $0.0021\n    AdversarialStage             2 calls       891 tokens  $0.0045\n                                 total: $0.0082  (1,826 tokens)\n```\n\nJSON output (`--json`) includes `usage` array with per-stage breakdown.\n\nBuilt-in pricing for GPT-4o, Claude Sonnet/Opus/Haiku, DeepSeek, Kimi K2.5, and more. Custom models show token counts (cost = $0 if model not in pricing table).\n\n## Configuration",
+            "old_string": "## Configuration",
+            "replace_all": false
+          },
+          "timestamp": "2026-03-14T21:43:45.357Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": ".venv/bin/pytest tests/ -q 2>&1",
+            "description": "Final test run"
+          },
+          "timestamp": "2026-03-14T21:43:48.637Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git add -A && git status",
+            "description": "Stage all changes"
+          },
+          "timestamp": "2026-03-14T21:43:58.003Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": {
+            "command": "git commit -m \"$(cat <<'EOF'\nAdd per-stage cost tracking with token usage and USD estimates\n\nProviders now track input/output tokens from API responses. Pipeline\nrecords StageUsage per stage (tokens, calls, cost). Verdict exposes\ntotal_tokens and total_cost properties. CLI shows cost breakdown.\nBuilt-in pricing table for GPT-4o, Claude, DeepSeek, Kimi K2.5.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n)\" && git push",
+            "description": "Commit and push cost tracking"
+          },
+          "timestamp": "2026-03-14T21:44:28.657Z"
+        }
+      ],
+      "total_additions": 387,
+      "total_deletions": 5,
+      "accepted_lines": 383,
+      "overriden_lines": 0
+    }
+  }
+}
